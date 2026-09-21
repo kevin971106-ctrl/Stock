@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T06:18:32.193815",
+  "generated_at": "2026-09-21T06:24:22.546260",
   "pyramid_status": "K=66.7（≥50）→ 高掛免戰牌，一張不追，維持定期定額",
   "k_value_0050": 66.7,
   "market_data": {
@@ -62,8 +62,8 @@
       "close": 14.81
     },
     "TWD=X": {
-      "close": 31.773
+      "close": 31.763
     }
   },
-  "ai_report": "Gemini 呼叫失敗：404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AQ.Ab8RN6JnJgEYG6dgV7Fco6SKNL_aaRvWkCoKE4RRq6nkrF_Bew"
+  "ai_report": "Gemini 呼叫失敗：Gemini API 呼叫失敗（HTTP 503），請檢查 GEMINI_API_KEY 是否有效"
 }
