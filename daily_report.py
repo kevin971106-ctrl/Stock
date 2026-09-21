@@ -13,11 +13,24 @@
 
 import os
 import json
+import time
+import random
 import requests
 from datetime import datetime, timedelta
 
 FINMIND_TOKEN = os.environ.get("FINMIND_TOKEN", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+# Yahoo Finance 對沒有瀏覽器標頭、或來自雲端主機（如 GitHub Actions）的請求
+# 容易回傳 429 Too Many Requests，因此統一用一個帶標頭的 Session，
+# 並在每次呼叫之間加入隨機延遲、失敗時自動重試。
+YAHOO_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+}
+_session = requests.Session()
+_session.headers.update(YAHOO_HEADERS)
 
 # ---- 你的持股設定（跟網頁 holdings 保持一致，之後有交易記得同步改這裡）----
 HOLDINGS_TW = [
@@ -65,12 +78,30 @@ def calc_kd(rows, n=9):
     return round(k, 1)
 
 
-def fetch_yahoo_quote(symbol):
+def fetch_yahoo_quote(symbol, max_retries=3):
+    """抓取即時報價，失敗（含429）時自動重試並延長等待時間"""
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-    resp = requests.get(url, params={"interval": "1d", "range": "5d"}, timeout=15)
-    resp.raise_for_status()
-    data = resp.json()
-    return data["chart"]["result"][0]["meta"]["regularMarketPrice"]
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            resp = _session.get(url, params={"interval": "1d", "range": "5d"}, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            # 每次成功呼叫後也稍微停一下，降低下一檔被判定為濫用的機率
+            time.sleep(random.uniform(1.0, 2.0))
+            return data["chart"]["result"][0]["meta"]["regularMarketPrice"]
+        except requests.exceptions.HTTPError as e:
+            last_error = e
+            if resp is not None and resp.status_code == 429:
+                wait = (attempt + 1) * 5 + random.uniform(0, 2)
+                print(f"  429 rate limited on {symbol}，等待 {wait:.1f} 秒後重試...")
+                time.sleep(wait)
+                continue
+            raise
+        except Exception as e:
+            last_error = e
+            time.sleep(2)
+    raise last_error
 
 
 def pyramid_suggestion(k_value):
