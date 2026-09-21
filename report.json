@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T06:39:08.955511",
+  "generated_at": "2026-09-21T08:33:51.293853",
   "pyramid_status": "K=66.7（≥50）→ 高掛免戰牌，一張不追，維持定期定額",
   "k_value_0050": 66.7,
   "market_data": {
@@ -59,10 +59,10 @@
       "close": 11921.686
     },
     "^VIX": {
-      "close": 14.81
+      "close": 14.94
     },
     "TWD=X": {
-      "close": 31.751
+      "close": 31.71
     }
   },
   "ai_report": "Gemini 呼叫失敗：Gemini API 呼叫失敗（HTTP 503），請檢查 GEMINI_API_KEY 是否有效"
