@@ -143,14 +143,24 @@ def build_prompt(market_data):
 
 
 def call_gemini(prompt):
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-    headers = {"Content-Type": "application/json"}
-    params = {"key": GEMINI_API_KEY}
+    # 用 Google 官方別名 gemini-flash-latest，避免特定版號未來被下架後又要改程式碼
+    model = "gemini-flash-latest"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
     body = {"contents": [{"parts": [{"text": prompt}]}]}
-    resp = requests.post(url, headers=headers, params=params, json=body, timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+    try:
+        resp = requests.post(url, headers=headers, json=body, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception as e:
+        # 重要：絕對不要把原始例外訊息直接寫進 report.json！
+        # requests 的例外物件可能包含完整的請求 URL，若金鑰是用 query string 帶入
+        # （例如 ?key=xxx）就會連同金鑰一起被記錄下來、被 commit 進 git 歷史。
+        # 這裡改用 x-goog-api-key header 傳金鑰（不會出現在 URL 裡），
+        # 並且錯誤訊息只保留 HTTP 狀態碼，不輸出任何原始例外內容。
+        status = getattr(getattr(e, "response", None), "status_code", "unknown")
+        raise RuntimeError(f"Gemini API 呼叫失敗（HTTP {status}），請檢查 GEMINI_API_KEY 是否有效")
 
 
 def main():
