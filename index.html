@@ -33,6 +33,7 @@ button:disabled{background:#64748b;cursor:not-allowed;}
   background:rgba(15,23,42,.6); backdrop-filter:blur(10px);
   border:1px solid rgba(59,130,246,.2); border-radius:1rem; padding:1.4rem; margin-bottom:1.3rem;
 }
+.card-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;}
 .glow-green{box-shadow:0 0 20px rgba(16,185,129,.3);}
 .glow-red{box-shadow:0 0 20px rgba(239,68,68,.3);}
 .glow-gold{box-shadow:0 0 20px rgba(245,158,11,.3);}
@@ -45,12 +46,18 @@ button:disabled{background:#64748b;cursor:not-allowed;}
 .text-blue{color:#60a5fa;} .text-amber{color:#fbbf24;} .text-emerald{color:#34d399;}
 .text-red{color:#f87171;} .text-gray{color:#cbd5e1;} .text-purple{color:#c084fc;}
 .holding-item{background:rgba(30,41,59,.5);padding:1rem;border-radius:.5rem;margin-bottom:.7rem;}
-.holding-header{font-size:1.05rem;font-weight:600;margin-bottom:.6rem;display:flex;align-items:center;gap:.5rem;}
+.holding-header{font-size:1.05rem;font-weight:600;margin-bottom:.6rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;}
 .badge{font-size:.65rem;padding:.15rem .5rem;border-radius:1rem;font-weight:600;}
 .badge-tw{background:rgba(59,130,246,.2);color:#93c5fd;}
 .badge-us{background:rgba(192,132,252,.2);color:#d8b4fe;}
+.grade-badge{display:inline-flex;align-items:center;justify-content:center;min-width:1.8rem;height:1.8rem;padding:0 .3rem;border-radius:50%;font-weight:900;font-size:.85rem;cursor:help;}
 .holding-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.4rem;font-size:.82rem;}
 .holding-profit{text-align:right;margin-top:.5rem;}
+.edit-icons{display:flex;gap:.5rem;margin-top:.7rem;}
+.icon-btn{background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3);padding:.4rem .8rem;border-radius:.4rem;font-size:.78rem;cursor:pointer;}
+.icon-btn:hover{background:rgba(59,130,246,.3);}
+.icon-btn.danger{background:rgba(239,68,68,.15);color:#f87171;border-color:rgba(239,68,68,.3);}
+.icon-btn.danger:hover{background:rgba(239,68,68,.3);}
 .alert{border:2px solid #f87171;background:rgba(239,68,68,.1);padding:1rem;border-radius:.5rem;margin-bottom:1.3rem;}
 .alert-title{color:#f87171;font-weight:700;font-size:1.05rem;margin-bottom:.4rem;}
 .pyramid-card{border:2px solid;border-radius:1rem;padding:1.4rem;margin-bottom:1.3rem;}
@@ -79,7 +86,15 @@ input[type=number],input[type=text],select{
 .time-stamp{font-size:.72rem;color:#64748b;margin-top:.4rem;}
 .footer{text-align:center;color:#64748b;font-size:.8rem;margin-top:2.5rem;padding:1rem;}
 .hidden{display:none;}
-@media (max-width:768px){ body{padding:.5rem;} .card{padding:1rem;} }
+.report-body{white-space:pre-wrap;line-height:1.8;background:rgba(15,23,42,.5);padding:1rem;border-radius:.5rem;font-size:.9rem;margin-top:.8rem;}
+.report-warning{color:#fbbf24;}
+.dca-row{display:grid;grid-template-columns:80px 1fr 1fr 44px;gap:.5rem;margin-bottom:.6rem;align-items:center;}
+.dca-card{background:rgba(30,41,59,.5);padding:.9rem;border-radius:.5rem;}
+.note{font-size:.75rem;color:#64748b;margin-top:.6rem;}
+canvas{width:100%;height:auto;background:rgba(15,23,42,.4);border-radius:.5rem;display:block;}
+.kline-controls{display:flex;gap:.7rem;align-items:center;margin-bottom:.8rem;flex-wrap:wrap;}
+.kline-controls select{width:auto;min-width:160px;}
+@media (max-width:768px){ body{padding:.5rem;} .card{padding:1rem;} .dca-row{grid-template-columns:64px 1fr 1fr 36px;} }
 </style>
 </head>
 <body>
@@ -89,14 +104,14 @@ input[type=number],input[type=text],select{
     <h1 class="title-font">投資戰情室 LIVE</h1>
     <p style="color:#94a3b8;font-size:.85rem;">林義凱 專屬版 · 台美跨市場 · 0050 金字塔監控</p>
     <div class="header-controls">
-      <button class="btn-primary" onclick="updatePrices()">
+      <button class="btn-primary" id="updateBtn" onclick="updatePrices()">
         <span id="updateIcon">🔄</span><span id="updateText">立即更新</span>
       </button>
       <button class="btn-secondary" onclick="toggleAutoRefresh()">
         <span>⏰</span><span id="autoRefreshText">開啟自動更新</span>
       </button>
       <button class="btn-secondary" onclick="toggleEditMode()">
-        <span>✏️</span><span id="editModeText">編輯持股</span>
+        <span>✏️</span><span id="editModeText">新增持股</span>
       </button>
     </div>
     <p class="time-stamp" id="lastUpdate">最後更新：載入中...</p>
@@ -121,7 +136,7 @@ input[type=number],input[type=text],select{
 
   <!-- 0050 金字塔監控 -->
   <div class="pyramid-card pyramid-idle" id="pyramidCard">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;">
+    <div class="card-head">
       <h2 style="font-size:1.3rem;">🔺 0050 金字塔智慧加碼監控</h2>
       <div style="text-align:right;">
         <div class="stat-label">0050 目前日K值</div>
@@ -143,20 +158,40 @@ input[type=number],input[type=text],select{
     </p>
   </div>
 
-  <!-- 定期定額提醒 -->
-  <div class="card">
-    <h2 style="font-size:1.2rem;margin-bottom:.6rem;">📅 定期定額紀律</h2>
-    <div class="grid grid-3">
-      <div style="background:rgba(30,41,59,.5);padding:.9rem;border-radius:.5rem;">
-        <div class="stat-label">每月 5 日</div><div style="font-weight:700;">0050 / 00646 各 NT$5,000</div>
-      </div>
-      <div style="background:rgba(30,41,59,.5);padding:.9rem;border-radius:.5rem;">
-        <div class="stat-label">每月 15 日</div><div style="font-weight:700;">0050 / 00646 各 NT$5,000</div>
-      </div>
-      <div style="background:rgba(30,41,59,.5);padding:.9rem;border-radius:.5rem;">
-        <div class="stat-label">原則</div><div style="font-weight:700;color:#34d399;">高檔不停扣，紀律優先</div>
+  <!-- AI 每日晨報 -->
+  <div class="card" id="reportCard">
+    <div class="card-head">
+      <h2 style="font-size:1.2rem;">🤖 AI 每日晨報</h2>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        <button class="btn-secondary" onclick="loadReport()"><span>🔄</span><span>重新載入</span></button>
+        <button class="btn-primary" onclick="window.open('https://github.com/kevin971106-ctrl/Stock/actions/workflows/daily-report.yml','_blank')">
+          <span>⚡</span><span>立即產生新報告</span>
+        </button>
       </div>
     </div>
+    <p class="time-stamp" id="reportTime">載入中...</p>
+    <p id="reportPyramid" style="margin-top:.5rem;font-size:.9rem;color:#cbd5e1;"></p>
+    <div id="reportIndices" class="grid grid-4" style="margin-top:.9rem;"></div>
+    <div id="reportContent" class="report-body"></div>
+    <p class="note">💡 按「立即產生新報告」會開啟 GitHub Actions 頁面，登入後按綠色的「Run workflow」手動觸發，約 1-2 分鐘後回來按「重新載入」即可看到最新內容。</p>
+  </div>
+
+  <!-- 定期定額紀律 -->
+  <div class="card">
+    <div class="card-head">
+      <h2 style="font-size:1.2rem;">📅 定期定額紀律</h2>
+      <button class="btn-secondary" onclick="toggleDcaEdit()"><span>✏️</span><span id="dcaEditText">編輯定期定額</span></button>
+    </div>
+    <div id="dcaReadView" class="grid grid-3" style="margin-top:.9rem;"></div>
+    <div id="dcaEditForm" class="hidden" style="margin-top:1rem;">
+      <div id="dcaRows"></div>
+      <div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap;">
+        <button class="btn-secondary" onclick="addDcaRow()"><span>➕</span><span>新增一筆</span></button>
+        <button class="btn-success" onclick="saveDcaPlans()"><span>✅</span><span>儲存設定</span></button>
+        <button class="btn-secondary" onclick="resetDcaDefaults()"><span>↺</span><span>還原預設</span></button>
+      </div>
+    </div>
+    <p class="note">原則：高檔不停扣，紀律優先。設定會存在這台裝置的瀏覽器裡，換裝置需要重新設定一次。</p>
   </div>
 
   <!-- 風險警示 -->
@@ -166,7 +201,7 @@ input[type=number],input[type=text],select{
     <p style="color:#94a3b8;font-size:.85rem;">建議：留意單一產業曝險，維持台美跨市場分散配置</p>
   </div>
 
-  <!-- 編輯表單 -->
+  <!-- 新增持股表單 -->
   <div class="card hidden" id="editForm">
     <h2 style="margin-bottom:1rem;font-size:1.3rem;">✨ 新增持股（智慧辨識，支援台美股）</h2>
     <div class="form-grid">
@@ -197,8 +232,19 @@ input[type=number],input[type=text],select{
 
   <!-- 持股明細 -->
   <div class="card">
-    <h2 style="font-size:1.3rem;margin-bottom:1rem;">📊 即時持股明細</h2>
+    <h2 style="font-size:1.3rem;margin-bottom:.3rem;">📊 即時持股明細</h2>
+    <p class="note" style="margin-top:0;margin-bottom:1rem;">個股評分：60%報酬率 + 40%近5日動能（S最佳／A／B／C，僅供參考，非投資建議）</p>
     <div id="holdingsList"></div>
+  </div>
+
+  <!-- K線圖 -->
+  <div class="card">
+    <h2 style="font-size:1.3rem;margin-bottom:.8rem;">📈 K線圖</h2>
+    <div class="kline-controls">
+      <select id="klineSelect" onchange="drawKlineFor(this.value)"></select>
+      <span id="klineStatus" style="font-size:.8rem;color:#64748b;">點「立即更新」抓取資料後即可看圖</span>
+    </div>
+    <canvas id="klineCanvas" width="900" height="320"></canvas>
   </div>
 
   <div class="footer">
@@ -208,7 +254,7 @@ input[type=number],input[type=text],select{
 </div>
 
 <script>
-// 股票資料庫（供智慧辨識）
+// ===== 股票資料庫（供智慧辨識）=====
 const stockDatabase = [
   {id:'0050',name:'元大台灣50',category:'台股大盤',currency:'TWD'},
   {id:'0056',name:'元大高股息',category:'台灣科技',currency:'TWD'},
@@ -227,8 +273,8 @@ const stockDatabase = [
   {id:'TSM',name:'台積電ADR',category:'美股個股',currency:'USD'},
 ];
 
-// 目前持股（依你最新對帳單）
-let holdings = [
+// ===== 持股（可被本機編輯並存進 localStorage）=====
+const defaultHoldings = [
   {id:'0050', name:'元大台灣50', shares:5990, buyPrice:102.54, currentPrice:102.54, category:'台股大盤', currency:'TWD'},
   {id:'00646',name:'元大S&P500', shares:4000, buyPrice:60.28,  currentPrice:60.28,  category:'美股成長', currency:'TWD'},
   {id:'00662',name:'富邦NASDAQ', shares:4000, buyPrice:101.26, currentPrice:101.26, category:'美股成長', currency:'TWD'},
@@ -237,23 +283,82 @@ let holdings = [
   {id:'KLAC', name:'KLA Corporation', shares:40,  buyPrice:181.33, currentPrice:181.33, category:'美股個股', currency:'USD'},
   {id:'SPCX', name:'SpaceX',          shares:1,   buyPrice:138.94, currentPrice:138.94, category:'美股個股', currency:'USD'},
 ];
+let holdings = JSON.parse(JSON.stringify(defaultHoldings));
+let editingIndex = null;
+
+// ===== 定期定額（可編輯，存 localStorage）=====
+const defaultDcaPlans = [
+  {day:5,  id:'0050',  amount:5000},
+  {day:5,  id:'00646', amount:5000},
+  {day:15, id:'0050',  amount:5000},
+  {day:15, id:'00646', amount:5000},
+];
+let dcaPlans = [];
 
 let capital = 85116;      // 台幣活存
 let fxRate = 32.5;        // USD/TWD，會在更新時自動抓取最新匯率
 let autoRefresh = false, autoRefreshInterval = null;
 let kValue = null;
+let klineDataCache = {};  // symbol -> {opens,highs,lows,closes,dates}
+let grades = {};          // holding.id -> {grade,score,color}
 
+function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
 function formatCurrency(num, cur='TWD'){
   return new Intl.NumberFormat('zh-TW',{style:'currency',currency:cur,minimumFractionDigits:0}).format(num);
 }
 function toTWD(h){ return h.currency==='USD' ? h.currentPrice*fxRate : h.currentPrice; }
 function toTWDBuy(h){ return h.currency==='USD' ? h.buyPrice*fxRate : h.buyPrice; }
+function getSymbol(h){ return h.currency==='TWD' ? `${h.id}.TW` : h.id; }
+
+// ===== 本機儲存 =====
+function loadHoldings(){
+  try{
+    const s = localStorage.getItem('sw_holdings');
+    if(s){ const parsed = JSON.parse(s); if(Array.isArray(parsed) && parsed.length) holdings = parsed; }
+  }catch(e){ console.error('讀取本機持股失敗', e); }
+}
+function saveHoldings(){
+  try{ localStorage.setItem('sw_holdings', JSON.stringify(holdings)); }catch(e){ console.error('儲存持股失敗', e); }
+}
+function loadDcaPlans(){
+  try{
+    const s = localStorage.getItem('sw_dcaPlans');
+    dcaPlans = s ? JSON.parse(s) : JSON.parse(JSON.stringify(defaultDcaPlans));
+  }catch(e){ dcaPlans = JSON.parse(JSON.stringify(defaultDcaPlans)); }
+}
+function saveDcaPlansToStorage(){
+  try{ localStorage.setItem('sw_dcaPlans', JSON.stringify(dcaPlans)); }catch(e){ console.error('儲存定期定額失敗', e); }
+}
+
+// ===== 個股評分（60%報酬率 + 40%近5日動能）=====
+function computeGrade(h){
+  const symbol = getSymbol(h);
+  const kd = klineDataCache[symbol];
+  const profitPct = h.buyPrice ? ((h.currentPrice-h.buyPrice)/h.buyPrice)*100 : 0;
+  let momentumPct = 0;
+  if(kd && kd.closes.length>=6){
+    const c0=kd.closes[kd.closes.length-1], c5=kd.closes[kd.closes.length-6];
+    momentumPct = c5 ? ((c0-c5)/c5)*100 : 0;
+  }
+  const returnScore = clamp((profitPct+20)/60*100,0,100);
+  const momentumScore = clamp((momentumPct+10)/20*100,0,100);
+  const score = returnScore*0.6 + momentumScore*0.4;
+  let grade='C', color='#f87171';
+  if(score>=80){ grade='S'; color='#c084fc'; }
+  else if(score>=65){ grade='A'; color='#34d399'; }
+  else if(score>=45){ grade='B'; color='#fbbf24'; }
+  return {grade, score:Math.round(score), color};
+}
+function calculateGrades(){
+  grades = {};
+  holdings.forEach(h=>{ grades[h.id] = computeGrade(h); });
+}
 
 function calculate(){
   let totalCost=0,totalMarket=0;
   holdings.forEach(h=>{ totalCost += h.shares*toTWDBuy(h); totalMarket += h.shares*toTWD(h); });
   const totalProfit = totalMarket-totalCost;
-  const totalReturn = (totalProfit/totalCost)*100;
+  const totalReturn = totalCost ? (totalProfit/totalCost)*100 : 0;
   const totalAssets = totalMarket+capital;
 
   document.getElementById('totalCost').textContent = formatCurrency(totalCost);
@@ -275,7 +380,7 @@ function calculate(){
   }
 
   const techValue = holdings.filter(h=>h.category==='台灣科技').reduce((s,h)=>s+h.shares*toTWD(h),0);
-  const techRatio = (techValue/totalAssets)*100;
+  const techRatio = totalAssets ? (techValue/totalAssets)*100 : 0;
   if(techRatio>50){
     document.getElementById('riskAlert').classList.remove('hidden');
     document.getElementById('techRatio').textContent = techRatio.toFixed(1)+'%';
@@ -283,6 +388,7 @@ function calculate(){
     document.getElementById('riskAlert').classList.add('hidden');
   }
 
+  calculateGrades();
   renderHoldings();
   renderPyramid();
 }
@@ -290,15 +396,35 @@ function calculate(){
 function renderHoldings(){
   const list = document.getElementById('holdingsList');
   list.innerHTML='';
-  holdings.forEach(h=>{
-    const profit = (h.currentPrice-h.buyPrice)*h.shares;
-    const profitPercent = ((h.currentPrice-h.buyPrice)/h.buyPrice)*100;
-    const marketValueTWD = h.shares*toTWD(h);
+  holdings.forEach((h,idx)=>{
     const item = document.createElement('div');
     item.className='holding-item';
+
+    if(editingIndex===idx){
+      item.innerHTML = `
+        <div class="holding-header">${h.id} ${h.name}
+          <span class="badge ${h.currency==='USD'?'badge-us':'badge-tw'}">${h.currency}</span>
+        </div>
+        <div class="form-grid" style="margin-top:.4rem;margin-bottom:.6rem;">
+          <div><label class="form-label">持股數</label><input type="number" id="editShares_${idx}" value="${h.shares}"></div>
+          <div><label class="form-label">成本均價</label><input type="number" step="0.01" id="editBuyPrice_${idx}" value="${h.buyPrice}"></div>
+        </div>
+        <div style="display:flex;gap:.5rem;">
+          <button class="btn-success" onclick="saveHoldingEdit(${idx})">✅ 儲存</button>
+          <button class="btn-secondary" onclick="cancelHoldingEdit()">❌ 取消</button>
+        </div>`;
+      list.appendChild(item);
+      return;
+    }
+
+    const profit = (h.currentPrice-h.buyPrice)*h.shares;
+    const profitPercent = h.buyPrice ? ((h.currentPrice-h.buyPrice)/h.buyPrice)*100 : 0;
+    const marketValueTWD = h.shares*toTWD(h);
+    const g = grades[h.id] || {grade:'--',score:'--',color:'#64748b'};
     item.innerHTML = `
       <div class="holding-header">${h.id} ${h.name}
         <span class="badge ${h.currency==='USD'?'badge-us':'badge-tw'}">${h.currency}</span>
+        <span class="grade-badge" style="background:${g.color}22;color:${g.color};border:1px solid ${g.color};" title="個股評分 ${g.score} 分（60%報酬率+40%近5日動能，僅供參考）">${g.grade}</span>
       </div>
       <div class="holding-details">
         <div><span style="color:#94a3b8;">持股：</span>${h.shares.toLocaleString()} 股</div>
@@ -313,9 +439,34 @@ function renderHoldings(){
         <div style="font-size:1rem;font-weight:700;color:${profitPercent>=0?'#34d399':'#f87171'};">
           ${profitPercent>=0?'+':''}${profitPercent.toFixed(2)}%
         </div>
+      </div>
+      <div class="edit-icons">
+        <button class="icon-btn" onclick="editHolding(${idx})">✏️ 編輯</button>
+        <button class="icon-btn danger" onclick="deleteHolding(${idx})">🗑️ 刪除</button>
       </div>`;
     list.appendChild(item);
   });
+}
+
+function editHolding(idx){ editingIndex=idx; renderHoldings(); }
+function cancelHoldingEdit(){ editingIndex=null; renderHoldings(); }
+function saveHoldingEdit(idx){
+  const shares=parseFloat(document.getElementById(`editShares_${idx}`).value);
+  const buyPrice=parseFloat(document.getElementById(`editBuyPrice_${idx}`).value);
+  if(!shares || shares<=0 || !buyPrice || buyPrice<=0){ alert('請輸入有效的股數與成本價'); return; }
+  holdings[idx].shares=shares;
+  holdings[idx].buyPrice=buyPrice;
+  editingIndex=null;
+  saveHoldings();
+  calculate();
+}
+function deleteHolding(idx){
+  const h = holdings[idx];
+  if(!confirm(`確定要刪除 ${h.id} ${h.name} 嗎？`)) return;
+  holdings.splice(idx,1);
+  saveHoldings();
+  calculate();
+  populateKlineSelect();
 }
 
 function renderPyramid(){
@@ -344,7 +495,7 @@ function renderPyramid(){
   }
 }
 
-// 計算KD(9,3,3)
+// ===== 計算KD(9,3,3) =====
 function calculateKD(highs, lows, closes){
   const n=9; let k=50, d=50, lastK=50;
   for(let i=n-1;i<closes.length;i++){
@@ -364,10 +515,23 @@ async function fetchYahoo(symbol){
   return res.json();
 }
 
+function extractOhlc(data){
+  const result = data.chart.result[0];
+  const ts = result.timestamp || [];
+  const q = result.indicators.quote[0];
+  const opens=[],highs=[],lows=[],closes=[],dates=[];
+  for(let i=0;i<ts.length;i++){
+    if(q.close[i]==null) continue;
+    opens.push(q.open[i]); highs.push(q.high[i]); lows.push(q.low[i]); closes.push(q.close[i]);
+    dates.push(new Date(ts[i]*1000));
+  }
+  return {opens,highs,lows,closes,dates};
+}
+
 async function updatePrices(){
   const icon=document.getElementById('updateIcon'), text=document.getElementById('updateText');
   icon.className='spin'; text.textContent='更新中...';
-  document.querySelector('.btn-primary').disabled=true;
+  document.getElementById('updateBtn').disabled=true;
 
   try {
     try {
@@ -377,16 +541,16 @@ async function updatePrices(){
 
     for(let i=0;i<holdings.length;i++){
       const h = holdings[i];
-      const symbol = h.currency==='TWD' ? `${h.id}.TW` : h.id;
+      const symbol = getSymbol(h);
       try {
         const data = await fetchYahoo(symbol);
         const result = data.chart.result[0];
         holdings[i].currentPrice = parseFloat(result.meta.regularMarketPrice.toFixed(2));
+        const kd = extractOhlc(data);
+        klineDataCache[symbol] = kd;
 
-        if(h.id==='0050'){
-          const q = result.indicators.quote[0];
-          const highs=q.high.filter(v=>v!=null), lows=q.low.filter(v=>v!=null), closes=q.close.filter(v=>v!=null);
-          if(closes.length>=9){ kValue = calculateKD(highs,lows,closes); }
+        if(h.id==='0050' && kd.closes.length>=9){
+          kValue = calculateKD(kd.highs, kd.lows, kd.closes);
         }
       } catch(e){ console.error(`Failed ${h.id}`, e); }
     }
@@ -395,11 +559,14 @@ async function updatePrices(){
     document.getElementById('lastUpdate').textContent =
       `最後更新：${now.toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})} ｜ 匯率 USD/TWD ${fxRate.toFixed(2)}`;
     calculate();
+
+    const sel = document.getElementById('klineSelect');
+    if(sel && sel.value) drawKlineFor(sel.value);
   } catch(e){
     alert('更新失敗，請檢查網路連線');
   } finally {
     icon.className=''; text.textContent='立即更新';
-    document.querySelector('.btn-primary').disabled=false;
+    document.getElementById('updateBtn').disabled=false;
   }
 }
 
@@ -419,7 +586,7 @@ function toggleEditMode(){
   const form=document.getElementById('editForm');
   const btn=document.getElementById('editModeText');
   form.classList.toggle('hidden');
-  btn.textContent = form.classList.contains('hidden') ? '編輯持股' : '關閉編輯';
+  btn.textContent = form.classList.contains('hidden') ? '新增持股' : '關閉新增';
 }
 
 function handleStockInput(value){
@@ -451,14 +618,188 @@ async function addHolding(){
   const currency=document.getElementById('newCurrency').value;
   const category=document.getElementById('newCategory').value;
   if(!id||!name||!shares||!buyPrice){ alert('請填寫代號、名稱、股數、成本價'); return; }
+  if(holdings.some(h=>h.id===id)){ alert('這檔股票已經在持股清單裡了，請用「編輯」修改，不要重複新增'); return; }
   holdings.push({id,name,shares,buyPrice,currentPrice:buyPrice,category,currency});
+  saveHoldings();
   calculate();
   toggleEditMode();
+  populateKlineSelect();
   updatePrices();
 }
 
+// ===== 定期定額 =====
+function renderDcaReadView(){
+  const el = document.getElementById('dcaReadView');
+  if(dcaPlans.length===0){ el.innerHTML = '<div style="color:#64748b;">尚未設定定期定額</div>'; return; }
+  const byDay = {};
+  dcaPlans.forEach(p=>{ (byDay[p.day] = byDay[p.day]||[]).push(p); });
+  el.innerHTML = Object.keys(byDay).sort((a,b)=>a-b).map(day=>{
+    const items = byDay[day].map(p=>`${p.id} NT$${(p.amount||0).toLocaleString()}`).join('、');
+    return `<div class="dca-card"><div class="stat-label">每月 ${day} 日</div><div style="font-weight:700;">${items}</div></div>`;
+  }).join('');
+}
+function toggleDcaEdit(){
+  const form=document.getElementById('dcaEditForm');
+  form.classList.toggle('hidden');
+  document.getElementById('dcaEditText').textContent = form.classList.contains('hidden') ? '編輯定期定額' : '關閉編輯';
+  if(!form.classList.contains('hidden')) renderDcaEditRows();
+}
+function renderDcaEditRows(){
+  const container=document.getElementById('dcaRows');
+  container.innerHTML = dcaPlans.map((p,idx)=>`
+    <div class="dca-row">
+      <input type="number" min="1" max="28" value="${p.day}" onchange="updateDcaField(${idx},'day',this.value)" placeholder="日期">
+      <input type="text" value="${p.id}" onchange="updateDcaField(${idx},'id',this.value.toUpperCase())" placeholder="股票代號">
+      <input type="number" value="${p.amount}" onchange="updateDcaField(${idx},'amount',this.value)" placeholder="金額">
+      <button class="icon-btn danger" onclick="removeDcaRow(${idx})">🗑️</button>
+    </div>`).join('');
+}
+function updateDcaField(idx,field,value){
+  if(field==='id'){ dcaPlans[idx].id = value; }
+  else { dcaPlans[idx][field] = parseFloat(value) || 0; }
+}
+function addDcaRow(){ dcaPlans.push({day:1,id:'',amount:0}); renderDcaEditRows(); }
+function removeDcaRow(idx){ dcaPlans.splice(idx,1); renderDcaEditRows(); }
+function saveDcaPlans(){
+  for(const p of dcaPlans){
+    if(!p.id || !p.day || p.day<1 || p.day>28 || !p.amount || p.amount<=0){
+      alert('請確認每一筆的日期(1-28)、股票代號、金額都已正確填寫'); return;
+    }
+  }
+  saveDcaPlansToStorage();
+  renderDcaReadView();
+  toggleDcaEdit();
+}
+function resetDcaDefaults(){
+  if(!confirm('確定要還原成預設的定期定額設定嗎？')) return;
+  dcaPlans = JSON.parse(JSON.stringify(defaultDcaPlans));
+  saveDcaPlansToStorage();
+  renderDcaReadView();
+  renderDcaEditRows();
+}
+
+// ===== AI 晨報（讀取 report.json）=====
+async function loadReport(){
+  const timeEl=document.getElementById('reportTime');
+  const pyramidEl=document.getElementById('reportPyramid');
+  const indicesEl=document.getElementById('reportIndices');
+  const contentEl=document.getElementById('reportContent');
+  timeEl.textContent='載入中...';
+  try{
+    const res = await fetch('./report.json?_=' + Date.now());
+    if(!res.ok) throw new Error('report.json 不存在或尚未產生');
+    const data = await res.json();
+
+    const dt = new Date(data.generated_at);
+    timeEl.textContent = `報告產生時間：${dt.toLocaleString('zh-TW',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}`;
+    pyramidEl.textContent = data.pyramid_status ? `🔺 ${data.pyramid_status}` : '';
+
+    const indexLabels = {'^TWII':'台股加權','^GSPC':'S&P 500','^IXIC':'NASDAQ','^SOX':'費城半導體','^VIX':'VIX恐慌指數','TWD=X':'美元/台幣'};
+    indicesEl.innerHTML = Object.keys(indexLabels).map(sym=>{
+      const v = data.market_data && data.market_data[sym] && data.market_data[sym].close;
+      return `<div><div class="stat-label">${indexLabels[sym]}</div><div class="stat-value text-blue title-font" style="font-size:1.15rem;">${v!=null ? v.toLocaleString() : '--'}</div></div>`;
+    }).join('');
+
+    const reportText = data.ai_report || '';
+    const isError = reportText.includes('呼叫失敗') || reportText.includes('未設定');
+    contentEl.innerHTML = isError
+      ? `<span class="report-warning">⚠️ ${reportText}</span><br><span style="color:#64748b;font-size:.8rem;">（AI 分析暫時無法產生，上方的市場數據仍是當天實際抓取結果）</span>`
+      : reportText.replace(/\n/g,'<br>');
+  } catch(e){
+    timeEl.textContent = '尚未載入到報告';
+    pyramidEl.textContent='';
+    indicesEl.innerHTML='';
+    contentEl.innerHTML = `<span style="color:#94a3b8;">目前抓不到 report.json，可能是排程還沒執行過。可以按上面「⚡ 立即產生新報告」先手動觸發一次，約 1-2 分鐘後再按「重新載入」。</span>`;
+  }
+}
+
+// ===== K線圖 =====
+function populateKlineSelect(){
+  const sel=document.getElementById('klineSelect');
+  const current = sel.value;
+  sel.innerHTML = holdings.map(h=>`<option value="${h.id}">${h.id} ${h.name}</option>`).join('');
+  if(current && holdings.some(h=>h.id===current)){ sel.value=current; }
+  else if(holdings.length>0){ sel.value=holdings[0].id; }
+}
+
+async function drawKlineFor(id){
+  const h = holdings.find(x=>x.id===id);
+  if(!h) return;
+  const statusEl=document.getElementById('klineStatus');
+  const symbol = getSymbol(h);
+  statusEl.textContent='載入中...';
+  try{
+    let kd = klineDataCache[symbol];
+    if(!kd){
+      const data = await fetchYahoo(symbol);
+      kd = extractOhlc(data);
+      klineDataCache[symbol]=kd;
+    }
+    if(!kd.closes.length){ statusEl.textContent='目前沒有可用的K線資料'; return; }
+    drawCandlestickChart('klineCanvas', kd);
+    statusEl.textContent = `${h.id} ${h.name} · 近${Math.min(kd.closes.length,60)}個交易日`;
+  } catch(e){
+    statusEl.textContent='K線資料載入失敗，請稍後再試或按「立即更新」';
+    console.error(e);
+  }
+}
+
+function drawCandlestickChart(canvasId, kd){
+  const canvas=document.getElementById(canvasId);
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const N = Math.min(kd.closes.length, 60);
+  const start = kd.closes.length - N;
+  const highs = kd.highs.slice(start), lows=kd.lows.slice(start),
+        opens=kd.opens.slice(start), closes=kd.closes.slice(start), dates=kd.dates.slice(start);
+
+  const maxP = Math.max(...highs), minP = Math.min(...lows);
+  const pad = (maxP-minP)*0.08 || 1;
+  const top = maxP+pad, bottom = minP-pad;
+
+  const marginL=60, marginR=15, marginT=15, marginB=30;
+  const plotW = W-marginL-marginR, plotH = H-marginT-marginB;
+  const xStep = plotW/N;
+  const yFor = p => marginT + (top-p)/(top-bottom)*plotH;
+
+  ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.fillStyle='#94a3b8'; ctx.font='11px sans-serif';
+  for(let i=0;i<=4;i++){
+    const p = bottom + (top-bottom)*i/4;
+    const y = yFor(p);
+    ctx.beginPath(); ctx.moveTo(marginL,y); ctx.lineTo(W-marginR,y); ctx.stroke();
+    ctx.fillText(p.toFixed(1), 4, y+4);
+  }
+
+  for(let i=0;i<N;i++){
+    const x = marginL + i*xStep + xStep/2;
+    const isUp = closes[i]>=opens[i];
+    const color = isUp ? '#34d399' : '#f87171';
+    ctx.strokeStyle = color; ctx.fillStyle = color;
+    ctx.beginPath(); ctx.moveTo(x, yFor(highs[i])); ctx.lineTo(x, yFor(lows[i])); ctx.stroke();
+    const yOpen=yFor(opens[i]), yClose=yFor(closes[i]);
+    const bodyTop=Math.min(yOpen,yClose), bodyH=Math.max(Math.abs(yClose-yOpen),1);
+    const bodyW = Math.max(xStep*0.6, 2);
+    ctx.fillRect(x-bodyW/2, bodyTop, bodyW, bodyH);
+  }
+
+  ctx.fillStyle='#64748b'; ctx.font='11px sans-serif';
+  [0, Math.floor(N/2), N-1].forEach(i=>{
+    if(!dates[i]) return;
+    const x = marginL + i*xStep + xStep/2;
+    const label = `${dates[i].getMonth()+1}/${dates[i].getDate()}`;
+    ctx.fillText(label, Math.max(marginL,x-12), H-8);
+  });
+}
+
 window.onload = function(){
+  loadHoldings();
+  loadDcaPlans();
   calculate();
+  renderDcaReadView();
+  populateKlineSelect();
+  loadReport();
   const now = new Date();
   document.getElementById('lastUpdate').textContent =
     `最後更新：${now.toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}（尚未抓取即時價，請點「立即更新」）`;
