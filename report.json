@@ -1,0 +1,63 @@
+{
+  "generated_at": "2026-09-21T06:13:21.449140",
+  "pyramid_status": "K=66.7（≥50）→ 高掛免戰牌，一張不追，維持定期定額",
+  "k_value_0050": 66.7,
+  "market_data": {
+    "0050": {
+      "name": "元大台灣50",
+      "close": 111.35,
+      "buy_price": 102.54,
+      "shares": 5990,
+      "k_value": 66.7
+    },
+    "00646": {
+      "name": "元大S&P500",
+      "close": 76.8,
+      "buy_price": 60.28,
+      "shares": 4000
+    },
+    "00662": {
+      "name": "富邦NASDAQ",
+      "close": 121.6,
+      "buy_price": 101.26,
+      "shares": 4000
+    },
+    "00713": {
+      "name": "元大台灣高息低波",
+      "close": 63.75,
+      "buy_price": 52.71,
+      "shares": 8000
+    },
+    "00919": {
+      "name": "群益台灣精選高息",
+      "close": 32.27,
+      "buy_price": 23.67,
+      "shares": 18000
+    },
+    "KLAC": {
+      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/KLAC?interval=1d&range=5d"
+    },
+    "SPCX": {
+      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/SPCX?interval=1d&range=5d"
+    },
+    "^TWII": {
+      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=1d&range=5d"
+    },
+    "^GSPC": {
+      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=5d"
+    },
+    "^IXIC": {
+      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/%5EIXIC?interval=1d&range=5d"
+    },
+    "^SOX": {
+      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/%5ESOX?interval=1d&range=5d"
+    },
+    "^VIX": {
+      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=5d"
+    },
+    "TWD=X": {
+      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/TWD=X?interval=1d&range=5d"
+    }
+  },
+  "ai_report": "Gemini 呼叫失敗：404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AQ.Ab8RN6JnJgEYG6dgV7Fco6SKNL_aaRvWkCoKE4RRq6nkrF_Bew"
+}
