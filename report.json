@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T06:13:21.449140",
+  "generated_at": "2026-09-21T06:18:32.193815",
   "pyramid_status": "K=66.7（≥50）→ 高掛免戰牌，一張不追，維持定期定額",
   "k_value_0050": 66.7,
   "market_data": {
@@ -35,28 +35,34 @@
       "shares": 18000
     },
     "KLAC": {
-      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/KLAC?interval=1d&range=5d"
+      "name": "KLA Corporation",
+      "close": 176.99,
+      "buy_price": 181.33,
+      "shares": 40
     },
     "SPCX": {
-      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/SPCX?interval=1d&range=5d"
+      "name": "SpaceX",
+      "close": 152.71,
+      "buy_price": 138.94,
+      "shares": 1
     },
     "^TWII": {
-      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=1d&range=5d"
+      "close": 47718.84
     },
     "^GSPC": {
-      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=5d"
+      "close": 7650.5
     },
     "^IXIC": {
-      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/%5EIXIC?interval=1d&range=5d"
+      "close": 26522.545
     },
     "^SOX": {
-      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/%5ESOX?interval=1d&range=5d"
+      "close": 11921.686
     },
     "^VIX": {
-      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=5d"
+      "close": 14.81
     },
     "TWD=X": {
-      "error": "429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/TWD=X?interval=1d&range=5d"
+      "close": 31.773
     }
   },
   "ai_report": "Gemini 呼叫失敗：404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AQ.Ab8RN6JnJgEYG6dgV7Fco6SKNL_aaRvWkCoKE4RRq6nkrF_Bew"
