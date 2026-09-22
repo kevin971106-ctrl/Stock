@@ -301,8 +301,48 @@ let autoRefresh = false, autoRefreshInterval = null;
 let kValue = null;
 let klineDataCache = {};  // symbol -> {opens,highs,lows,closes,dates}
 let grades = {};          // holding.id -> {grade,score,color}
+let reportMarketData = null;   // report.json 裡的 market_data（每天 08:30 由 GitHub Actions 產生，伺服器端抓取，不受瀏覽器 CORS 限制）
+let priceSource = {};          // holding.id -> 'live' | 'report' | 'cost'（現價目前是即時抓到的、還是晨報資料、還是只是成本價）
 
 function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
+function sourceLabelHtml(id){
+  const s = priceSource[id];
+  if(s==='live')   return '<span style="font-size:.68rem;color:#34d399;border:1px solid #34d399;border-radius:1rem;padding:.05rem .4rem;">即時</span>';
+  if(s==='report') return '<span style="font-size:.68rem;color:#fbbf24;border:1px solid #fbbf24;border-radius:1rem;padding:.05rem .4rem;">晨報</span>';
+  return '<span style="font-size:.68rem;color:#f87171;border:1px solid #f87171;border-radius:1rem;padding:.05rem .4rem;">成本價</span>';
+}
+// 把 report.json 裡的歷史K線（{date,open,high,low,close}[]）轉成畫圖/評分用的格式
+function reportHistoryToKd(history){
+  const opens=[],highs=[],lows=[],closes=[],dates=[];
+  history.forEach(r=>{
+    if(r.close==null) return;
+    opens.push(r.open); highs.push(r.high); lows.push(r.low); closes.push(r.close);
+    dates.push(new Date(r.date+'T00:00:00'));
+  });
+  return {opens,highs,lows,closes,dates};
+}
+// 把 report.json 裡（伺服器端抓的、不受瀏覽器CORS限制）的收盤價 + 歷史K線套到目前持股上，
+// 當作「立即更新」/K線圖 失敗時的可靠備援，也讓網頁一打開就有接近真實的現價與K線，而不是成本價、空白圖。
+function applyReportPricesToHoldings(){
+  if(!reportMarketData) return;
+  holdings.forEach(h=>{
+    const m = reportMarketData[h.id];
+    if(m && typeof m.close === 'number'){
+      h.currentPrice = m.close;
+      priceSource[h.id] = 'report';
+    }
+    if(m && Array.isArray(m.history) && m.history.length){
+      const symbol = getSymbol(h);
+      // 只有在還沒有更即時的資料時才用晨報資料，避免蓋掉「立即更新」剛抓到的即時K線
+      if(!klineDataCache[symbol]){
+        klineDataCache[symbol] = reportHistoryToKd(m.history);
+      }
+      if(h.id==='0050' && kValue===null && m.k_value!=null){
+        kValue = m.k_value;
+      }
+    }
+  });
+}
 function formatCurrency(num, cur='TWD'){
   return new Intl.NumberFormat('zh-TW',{style:'currency',currency:cur,minimumFractionDigits:0}).format(num);
 }
@@ -429,7 +469,7 @@ function renderHoldings(){
       <div class="holding-details">
         <div><span style="color:#94a3b8;">持股：</span>${h.shares.toLocaleString()} 股</div>
         <div><span style="color:#94a3b8;">成本：</span>${h.currency==='USD'?'$':''}${h.buyPrice}${h.currency==='TWD'?' NTD':''}</div>
-        <div><span style="color:#94a3b8;">現價：</span><span style="color:#60a5fa;">${h.currency==='USD'?'$':''}${h.currentPrice}${h.currency==='TWD'?' NTD':''}</span></div>
+        <div><span style="color:#94a3b8;">現價：</span><span style="color:#60a5fa;">${h.currency==='USD'?'$':''}${h.currentPrice}${h.currency==='TWD'?' NTD':''}</span> ${sourceLabelHtml(h.id)}</div>
         <div><span style="color:#94a3b8;">市值(台幣)：</span>${formatCurrency(marketValueTWD)}</div>
       </div>
       <div class="holding-profit">
@@ -533,6 +573,8 @@ async function updatePrices(){
   icon.className='spin'; text.textContent='更新中...';
   document.getElementById('updateBtn').disabled=true;
 
+  let liveFailCount = 0;
+
   try {
     try {
       const fxData = await fetchYahoo('TWD=X');
@@ -546,18 +588,34 @@ async function updatePrices(){
         const data = await fetchYahoo(symbol);
         const result = data.chart.result[0];
         holdings[i].currentPrice = parseFloat(result.meta.regularMarketPrice.toFixed(2));
+        priceSource[h.id] = 'live';
         const kd = extractOhlc(data);
         klineDataCache[symbol] = kd;
 
         if(h.id==='0050' && kd.closes.length>=9){
           kValue = calculateKD(kd.highs, kd.lows, kd.closes);
         }
-      } catch(e){ console.error(`Failed ${h.id}`, e); }
+      } catch(e) {
+        // 瀏覽器對 Yahoo Finance 的直接請求常被 CORS 政策擋下（伺服器沒開放跨網域讀取），
+        // 這裡不再默默吞掉錯誤：改用 report.json 裡當天早上伺服器端抓到的價格當備援，
+        // 讓現價至少是「今天早上的真實收盤價」而不是停在成本價。
+        console.error(`即時抓價失敗 ${h.id}（很可能是瀏覽器 CORS 限制）`, e);
+        liveFailCount++;
+        if(reportMarketData && reportMarketData[h.id] && typeof reportMarketData[h.id].close === 'number'){
+          holdings[i].currentPrice = reportMarketData[h.id].close;
+          priceSource[h.id] = 'report';
+        }
+      }
     }
 
     const now = new Date();
-    document.getElementById('lastUpdate').textContent =
-      `最後更新：${now.toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})} ｜ 匯率 USD/TWD ${fxRate.toFixed(2)}`;
+    let statusMsg = `最後更新：${now.toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})} ｜ 匯率 USD/TWD ${fxRate.toFixed(2)}`;
+    if(liveFailCount>0){
+      statusMsg += liveFailCount===holdings.length
+        ? ' ｜ ⚠️ 瀏覽器無法直接連線 Yahoo Finance（CORS限制），現價改用今早晨報資料'
+        : ` ｜ ⚠️ 有 ${liveFailCount} 檔即時抓價失敗，已改用晨報資料備援`;
+    }
+    document.getElementById('lastUpdate').textContent = statusMsg;
     calculate();
 
     const sel = document.getElementById('klineSelect');
@@ -705,6 +763,19 @@ async function loadReport(){
     contentEl.innerHTML = isError
       ? `<span class="report-warning">⚠️ ${reportText}</span><br><span style="color:#64748b;font-size:.8rem;">（AI 分析暫時無法產生，上方的市場數據仍是當天實際抓取結果）</span>`
       : reportText.replace(/\n/g,'<br>');
+
+    // 把伺服器端抓到的收盤價（不受瀏覽器CORS限制，可靠）套用到持股現價，
+    // 這樣網頁一打開、還沒按「立即更新」之前，現價就已經是「今早真實收盤價」而不是成本價。
+    reportMarketData = data.market_data || null;
+    applyReportPricesToHoldings();
+    calculate();
+    const sel = document.getElementById('klineSelect');
+    if(sel && sel.value) drawKlineFor(sel.value);
+
+    const lastUpdateEl = document.getElementById('lastUpdate');
+    if(lastUpdateEl){
+      lastUpdateEl.textContent = `現價來源：晨報 ${dt.toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})} ｜ 可按「立即更新」嘗試抓即時價`;
+    }
   } catch(e){
     timeEl.textContent = '尚未載入到報告';
     pyramidEl.textContent='';
@@ -730,6 +801,7 @@ async function drawKlineFor(id){
   statusEl.textContent='載入中...';
   try{
     let kd = klineDataCache[symbol];
+    let fromCache = !!kd;
     if(!kd){
       const data = await fetchYahoo(symbol);
       kd = extractOhlc(data);
@@ -737,9 +809,13 @@ async function drawKlineFor(id){
     }
     if(!kd.closes.length){ statusEl.textContent='目前沒有可用的K線資料'; return; }
     drawCandlestickChart('klineCanvas', kd);
-    statusEl.textContent = `${h.id} ${h.name} · 近${Math.min(kd.closes.length,60)}個交易日`;
+    const sourceNote = fromCache ? '（晨報資料）' : '（即時抓取）';
+    statusEl.textContent = `${h.id} ${h.name} · 近${Math.min(kd.closes.length,60)}個交易日 ${sourceNote}`;
   } catch(e){
-    statusEl.textContent='K線資料載入失敗，請稍後再試或按「立即更新」';
+    // 瀏覽器直接連線 Yahoo Finance 常被 CORS 政策擋下；這裡是「這檔股票在 report.json
+    // 裡也還沒有歷史K線資料」的情況才會走到（例如剛手動新增、晨報還沒跑過的持股），
+    // 所以失敗時老實告知，而不是裝作有資料。
+    statusEl.textContent='⚠️ K線資料抓取失敗（瀏覽器CORS限制，且晨報還沒有這檔的資料），可稍後再試或等明早晨報跑過';
     console.error(e);
   }
 }
@@ -799,10 +875,8 @@ window.onload = function(){
   calculate();
   renderDcaReadView();
   populateKlineSelect();
-  loadReport();
-  const now = new Date();
-  document.getElementById('lastUpdate').textContent =
-    `最後更新：${now.toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}（尚未抓取即時價，請點「立即更新」）`;
+  document.getElementById('lastUpdate').textContent = '正在讀取晨報資料...';
+  loadReport(); // 內部會在讀到 report.json 後，自動更新現價與「最後更新」文字
 };
 </script>
 </body>
