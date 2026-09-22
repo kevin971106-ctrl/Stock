@@ -143,8 +143,8 @@ def build_prompt(market_data):
 
 
 def call_gemini(prompt):
-    # Gemini 模型改版很快（1.5→2.0→2.5→3.x），依序嘗試，
-    # 第一個成功回應的就採用，避免單一模型被下架就整支腳本掛掉。
+    # Gemini 模型改版很快（1.5→2.0→2.5→3.x），依序嘗試多個候選模型；
+    # 503（伺服器過載）、429（額度限流）是暫時性問題，同一個模型先重試幾次再放棄。
     candidate_models = [
         "gemini-2.5-flash",
         "gemini-flash-latest",
@@ -157,27 +157,32 @@ def call_gemini(prompt):
     last_status = None
     for model in candidate_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        try:
-            resp = requests.post(url, headers=headers, json=body, timeout=30)
-            if resp.status_code == 404:
-                last_status = 404
-                continue  # 這個模型不存在/已下架，換下一個試試
-            resp.raise_for_status()
-            data = resp.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-        except requests.exceptions.HTTPError as e:
-            last_status = getattr(e.response, "status_code", "unknown")
-            if last_status == 404:
-                continue
-            # 非 404 的錯誤（例如 401/403 金鑰無效、429 額度用完）直接中止，換模型也沒用
-            raise RuntimeError(
-                f"Gemini API 呼叫失敗（HTTP {last_status}），請檢查 GEMINI_API_KEY 是否有效，"
-                f"或前往 Google Cloud Console 確認該專案已啟用 Generative Language API"
-            )
+        for attempt in range(3):  # 同一個模型最多重試3次
+            try:
+                resp = requests.post(url, headers=headers, json=body, timeout=30)
+                if resp.status_code == 404:
+                    last_status = 404
+                    break  # 模型不存在，不用重試，直接換下一個模型
+                if resp.status_code in (503, 429):
+                    last_status = resp.status_code
+                    wait = (attempt + 1) * 8 + random.uniform(0, 3)
+                    print(f"  {model} 回傳 {resp.status_code}（伺服器過載/限流），"
+                          f"等待 {wait:.1f} 秒後重試 (第{attempt+1}次)...")
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+            except requests.exceptions.HTTPError as e:
+                last_status = getattr(e.response, "status_code", "unknown")
+                raise RuntimeError(
+                    f"Gemini API 呼叫失敗（HTTP {last_status}），請檢查 GEMINI_API_KEY 是否有效"
+                )
+        # 對這個模型重試3次仍失敗（503/429）或直接404 → 換下一個候選模型
     raise RuntimeError(
-        f"Gemini API 呼叫失敗：候選模型 {candidate_models} 全部回傳 404，"
-        f"請至 Google AI Studio 重新建立 API key（建議選『Create API key in new project』），"
-        f"並確認 Google Cloud Console 的 Generative Language API 已啟用"
+        f"Gemini API 呼叫失敗：所有候選模型都無法使用（最後狀態碼 HTTP {last_status}）。"
+        f"若是 503/429，通常是 Google 免費層暫時過載，明天排程重跑大多會自動恢復；"
+        f"若持續發生，可能要考慮改用付費層或其他免費模型（如 Groq、OpenRouter）"
     )
 
 
