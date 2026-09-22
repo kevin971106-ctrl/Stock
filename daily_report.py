@@ -87,7 +87,6 @@ def fetch_yahoo_quote(symbol, max_retries=3):
             resp = _session.get(url, params={"interval": "1d", "range": "5d"}, timeout=15)
             resp.raise_for_status()
             data = resp.json()
-            # 每次成功呼叫後也稍微停一下，降低下一檔被判定為濫用的機率
             time.sleep(random.uniform(1.0, 2.0))
             return data["chart"]["result"][0]["meta"]["regularMarketPrice"]
         except requests.exceptions.HTTPError as e:
@@ -95,6 +94,44 @@ def fetch_yahoo_quote(symbol, max_retries=3):
             if resp is not None and resp.status_code == 429:
                 wait = (attempt + 1) * 5 + random.uniform(0, 2)
                 print(f"  429 rate limited on {symbol}，等待 {wait:.1f} 秒後重試...")
+                time.sleep(wait)
+                continue
+            raise
+        except Exception as e:
+            last_error = e
+            time.sleep(2)
+    raise last_error
+
+
+def fetch_yahoo_history(symbol, max_retries=3):
+    """抓取美股近3個月完整OHLC歷史資料，供網頁K線圖使用（格式對齊 report.json 的 history 欄位）"""
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            resp = _session.get(url, params={"interval": "1d", "range": "3mo"}, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            time.sleep(random.uniform(1.0, 2.0))
+            result = data["chart"]["result"][0]
+            ts = result.get("timestamp", [])
+            q = result["indicators"]["quote"][0]
+            rows = []
+            for i in range(len(ts)):
+                if q["close"][i] is None:
+                    continue
+                rows.append({
+                    "date": datetime.utcfromtimestamp(ts[i]).strftime("%Y-%m-%d"),
+                    "open": q["open"][i],
+                    "high": q["high"][i],
+                    "low": q["low"][i],
+                    "close": q["close"][i],
+                })
+            return rows
+        except requests.exceptions.HTTPError as e:
+            last_error = e
+            if resp is not None and resp.status_code == 429:
+                wait = (attempt + 1) * 5 + random.uniform(0, 2)
                 time.sleep(wait)
                 continue
             raise
@@ -189,7 +226,7 @@ def call_gemini(prompt):
 def main():
     market_data = {}
 
-    # 台股：抓價格 + 計算0050日K
+    # 台股：抓價格 + 完整歷史K棒 + 計算0050日K
     for h in HOLDINGS_TW:
         try:
             rows = fetch_finmind_price(h["id"])
@@ -200,6 +237,11 @@ def main():
                     "close": latest["close"],
                     "buy_price": h["buy_price"],
                     "shares": h["shares"],
+                    # 網頁K線圖用：轉成跟Yahoo美股一致的 {date,open,high,low,close} 格式
+                    "history": [
+                        {"date": r["date"], "open": r["open"], "high": r["max"], "low": r["min"], "close": r["close"]}
+                        for r in rows[-90:]
+                    ],
                 }
                 if h["id"] == "0050":
                     entry["k_value"] = calc_kd(rows)
@@ -207,13 +249,19 @@ def main():
         except Exception as e:
             market_data[h["id"]] = {"error": str(e)}
 
-    # 美股
+    # 美股：抓即時價 + 完整歷史K棒
     for h in HOLDINGS_US:
         try:
             price = fetch_yahoo_quote(h["id"])
+            history = []
+            try:
+                history = fetch_yahoo_history(h["id"])
+            except Exception as hist_err:
+                print(f"  {h['id']} 歷史K棒抓取失敗（不影響現價）: {hist_err}")
             market_data[h["id"]] = {
                 "name": h["name"], "close": price,
                 "buy_price": h["buy_price"], "shares": h["shares"],
+                "history": history,
             }
         except Exception as e:
             market_data[h["id"]] = {"error": str(e)}

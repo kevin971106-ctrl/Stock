@@ -642,13 +642,20 @@ async function updatePrices(){
         }
       } catch(e) {
         // 瀏覽器對 Yahoo Finance 的直接請求常被 CORS 政策擋下（伺服器沒開放跨網域讀取），
-        // 這裡不再默默吞掉錯誤：改用 report.json 裡當天早上伺服器端抓到的價格當備援，
-        // 讓現價至少是「今天早上的真實收盤價」而不是停在成本價。
+        // 這裡不再默默吞掉錯誤：改用 report.json 裡當天早上伺服器端抓到的價格/K線當備援，
+        // 讓現價、K線圖、金字塔K值至少都是「今天早上的真實資料」而不是停在成本價/空白/不變。
         console.error(`即時抓價失敗 ${h.id}（很可能是瀏覽器 CORS 限制）`, e);
         liveFailCount++;
-        if(reportMarketData && reportMarketData[h.id] && typeof reportMarketData[h.id].close === 'number'){
-          holdings[i].currentPrice = reportMarketData[h.id].close;
+        const rm = reportMarketData && reportMarketData[h.id];
+        if(rm && typeof rm.close === 'number'){
+          holdings[i].currentPrice = rm.close;
           priceSource[h.id] = 'report';
+        }
+        if(rm && Array.isArray(rm.history) && rm.history.length){
+          klineDataCache[symbol] = reportHistoryToKd(rm.history);
+        }
+        if(h.id==='0050' && rm && rm.k_value!=null){
+          kValue = rm.k_value;
         }
       }
     }
