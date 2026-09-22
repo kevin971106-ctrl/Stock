@@ -159,16 +159,27 @@ canvas{width:100%;height:auto;background:var(--bg);border:1px solid var(--border
     <div class="card"><div class="stat-label">總資產</div><div class="stat-value text-emerald title-font" id="totalAssets">$0</div></div>
   </div>
 
-  <!-- 0050 金字塔監控 -->
+  <!-- K值監控 / 0050 金字塔監控 -->
   <div class="pyramid-card pyramid-idle" id="pyramidCard">
     <div class="card-head">
-      <h2 style="font-size:1.3rem;">🔺 0050 金字塔智慧加碼監控</h2>
+      <h2 style="font-size:1.3rem;">🔺 K值監控</h2>
+    </div>
+    <div class="card-head" style="margin-top:.6rem;">
+      <div>
+        <div class="stat-label">選擇持股查看K值</div>
+        <select id="kValueSelect" onchange="onKValueSelectChange(this.value)"></select>
+      </div>
       <div style="text-align:right;">
-        <div class="stat-label">0050 目前日K值</div>
+        <div class="stat-label" id="kValueLabel">0050 目前日K值</div>
         <div class="stat-value large title-font" id="kValue">--</div>
       </div>
     </div>
-    <p id="pyramidStatus" style="margin-top:.8rem;font-size:.95rem;color:var(--ink);">
+    <p id="kValueNote" style="font-size:.78rem;color:var(--ink-faint);margin-top:.4rem;"></p>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:1.1rem 0;">
+
+    <div class="stat-label" style="margin-bottom:.5rem;">0050 金字塔智慧加碼判斷（固定依據0050，不受上面選擇影響）</div>
+    <p id="pyramidStatus" style="font-size:.95rem;color:var(--ink);">
       點擊「立即更新」抓取最新日K值
     </p>
     <div class="k-ladder">
@@ -552,16 +563,17 @@ function deleteHolding(idx){
   saveHoldings();
   calculate();
   populateKlineSelect();
+  populateKValueSelect();
 }
 
 function renderPyramid(){
   const card = document.getElementById('pyramidCard');
-  const kEl = document.getElementById('kValue');
   const statusEl = document.getElementById('pyramidStatus');
   ['step50','step40','step30','step20','step10'].forEach(id=>document.getElementById(id).classList.remove('hit'));
 
-  if(kValue===null){ kEl.textContent='--'; return; }
-  kEl.textContent = kValue.toFixed(1);
+  renderKValueSelector();  // 更新上方「選擇持股查看K值」的顯示
+
+  if(kValue===null){ statusEl.textContent='點擊「立即更新」抓取最新日K值'; return; }
 
   let amount=0, stepId='step50';
   if(kValue<20){ amount=50000; stepId='step10'; }
@@ -577,6 +589,46 @@ function renderPyramid(){
   } else {
     card.className='pyramid-card pyramid-idle';
     statusEl.innerHTML = `✅ 0050 日K = ${kValue.toFixed(1)}（≥50），<strong style="color:var(--gain);">高掛免戰牌，一張不追</strong>，維持定期定額紀律即可`;
+  }
+}
+
+// ===== K值監控：可選擇任意持股查看K值（僅供參考，加碼判斷固定依據0050）=====
+function populateKValueSelect(){
+  const sel=document.getElementById('kValueSelect');
+  if(!sel) return;
+  const current = sel.value;
+  sel.innerHTML = holdings.map(h=>`<option value="${h.id}">${h.id} ${h.name}</option>`).join('');
+  if(current && holdings.some(h=>h.id===current)){ sel.value=current; }
+  else if(holdings.some(h=>h.id==='0050')){ sel.value='0050'; }
+  else if(holdings.length>0){ sel.value=holdings[0].id; }
+  renderKValueSelector();
+}
+function onKValueSelectChange(id){ renderKValueSelector(); }
+function renderKValueSelector(){
+  const sel = document.getElementById('kValueSelect');
+  const labelEl = document.getElementById('kValueLabel');
+  const kEl = document.getElementById('kValue');
+  const noteEl = document.getElementById('kValueNote');
+  if(!sel || !sel.value) return;
+  const id = sel.value;
+  labelEl.textContent = `${id} 目前日K值`;
+
+  if(id==='0050'){
+    kEl.textContent = kValue!=null ? kValue.toFixed(1) : '--';
+    noteEl.textContent = '';
+    return;
+  }
+  const h = holdings.find(x=>x.id===id);
+  if(!h){ kEl.textContent='--'; noteEl.textContent=''; return; }
+  const symbol = getSymbol(h);
+  const kd = klineDataCache[symbol];
+  if(kd && kd.closes.length>=9){
+    const kv = calculateKD(kd.highs, kd.lows, kd.closes);
+    kEl.textContent = kv.toFixed(1);
+    noteEl.textContent = '此為參考數值，金字塔加碼判斷固定依據 0050，不受此選擇影響';
+  } else {
+    kEl.textContent = '--';
+    noteEl.textContent = '尚無足夠K線資料計算K值，請按「立即更新」或稍後查看晨報結果';
   }
 }
 
@@ -734,6 +786,7 @@ async function addHolding(){
   calculate();
   toggleEditMode();
   populateKlineSelect();
+  populateKValueSelect();
   updatePrices();
 }
 
@@ -935,6 +988,7 @@ window.onload = function(){
   calculate();
   renderDcaReadView();
   populateKlineSelect();
+  populateKValueSelect();
   document.getElementById('lastUpdate').textContent = '正在讀取晨報資料...';
   loadReport(); // 內部會在讀到 report.json 後，自動更新現價與「最後更新」文字
 };
