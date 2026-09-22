@@ -192,7 +192,11 @@ def build_prompt(market_data):
 
 def call_gemini(prompt, max_retries=3):
     # 用 Google 官方別名 gemini-flash-latest，避免特定版號未來被下架後又要改程式碼
-    model = "gemini-flash-latest"
+    # 改用釘住的穩定版本 gemini-2.5-flash，而不是「永遠指向最新版」的 gemini-flash-latest。
+    # 最新版模型（目前是 Gemini 3.5 系列）剛上線時容量通常比較緊繃，503頻率較高；
+    # 2.5-flash 已經上線一段時間、比較穩定。代價是：以後 Google 真的把 2.5-flash 淘汰時
+    # （通常會提前很久公告），需要手動把這裡的版本號改成新的穩定版。
+    model = "gemini-2.5-flash"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
     body = {"contents": [{"parts": [{"text": prompt}]}]}
