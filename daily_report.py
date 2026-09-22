@@ -167,31 +167,41 @@ def pyramid_suggestion(k_value):
 
 
 def build_prompt(market_data):
-    """依你的投資者設定檔組出分析 prompt"""
-    return f"""你是一位保守防禦型的投資分析助手，服務對象是林義凱。
+    """依你的投資者設定檔組出分析 prompt（現在會要求模型先上網搜尋最新新聞再回答）"""
+    holdings_list = "0050、00646、00662、00713、00919、KLAC（KLA Corporation）、SPCX（SpaceX）"
+    return f"""你是一位保守防禦型的投資分析助手，服務對象是林義凱。你有Google搜尋工具可以查詢當下最新的新聞，請務必先搜尋今天/近期的真實新聞再回答，不要只憑舊有知識瞎猜。
 
 他的投資原則：
 - 重視下檔風險，不追高，不因短期情緒交易
 - ETF為核心，長期投資，台美跨市場分散
 - 每月5日/15日定期定額買 0050、00646 各NT$5,000
 - 0050金字塔加碼法：日K<50才開始分階梯加碼，現金備用金 NT${CASH_TWD:,}
+- 持股：{holdings_list}
 
 今日市場數據：
 {json.dumps(market_data, ensure_ascii=False, indent=2)}
 
-請用「保守、防禦、數據導向」的風格，輸出今日投資晨報，需包含：
-1. 全球市場摘要（美股三大指數、費半、台股、VIX）
-2. 半導體/AI產業重點（若數據中有KLAC相關資訊）
-3. 0050金字塔加碼法：目前是否觸發？
-4. 對每檔持股（0050/00646/00662/00713/00919/KLAC/SPCX）的簡短建議
-5. 今日市場判斷（🟢偏多/🟡中性/🟠謹慎/🔴偏空）+ 今日操作建議
+請用「保守、防禦、數據導向」的風格，搜尋後輸出今日投資晨報，需包含以下區塊（請保留這些標題）：
 
-請只做事實陳述與紀律提醒，不要鼓勵追高或頻繁交易。輸出繁體中文，控制在600字內。
+【市場摘要】全球市場摘要（美股三大指數、費半、台股、VIX），依上面的數據陳述現況。
+
+【持股相關新聞】搜尋並列出今天跟林義凱持股直接相關的新聞（{holdings_list} 各自對應的公司/追蹤指數/成分股，若某檔今天沒有重大新聞可省略不寫，不要硬湊）。
+
+【本週/本月焦點新聞】搜尋近一週、近一月與股市或半導體/AI/美股大盤/台股大盤相關產業最熱門的重點新聞（例如：Fed利率決策、地緣政治、半導體法案、AI晶片需求、大型科技公司財報等），挑2-4則最重要的簡述。
+
+【趨勢變化與可能影響】根據以上新聞，探討可能出現的趨勢變化（例如：升息/降息預期改變、AI產業景氣循環、地緣政治風險升溫或降溫等），並說明對他持股組合可能的影響方向——只做情境分析與風險提醒，不做加碼/停利等具體操作建議。
+
+【金字塔加碼判斷】0050金字塔加碼法目前是否觸發？
+
+【持股建議】對每檔持股的簡短建議（一行一檔）。
+
+【今日判斷】今日市場判斷（🟢偏多/🟡中性/🟠謹慎/🔴偏空）+ 一句話操作提醒。
+
+請只做事實陳述與紀律提醒，不要鼓勵追高或頻繁交易，不要編造搜尋不到的新聞。輸出繁體中文，控制在900字內（不含來源清單）。
 """
 
 
 def call_gemini(prompt, max_retries=3):
-    # 用 Google 官方別名 gemini-flash-latest，避免特定版號未來被下架後又要改程式碼
     # 改用釘住的穩定版本 gemini-2.5-flash，而不是「永遠指向最新版」的 gemini-flash-latest。
     # 最新版模型（目前是 Gemini 3.5 系列）剛上線時容量通常比較緊繃，503頻率較高；
     # 2.5-flash 已經上線一段時間、比較穩定。代價是：以後 Google 真的把 2.5-flash 淘汰時
@@ -199,14 +209,35 @@ def call_gemini(prompt, max_retries=3):
     model = "gemini-2.5-flash"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
-    body = {"contents": [{"parts": [{"text": prompt}]}]}
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        # 開啟 Google 搜尋 grounding，讓模型回答前能先查詢當下真實的新聞，
+        # 而不是只憑訓練資料瞎猜（訓練資料本來就不會有「今天」的新聞）。
+        # 免費額度：每天500次搜尋，這裡一天只用1次，完全用不到額外費用。
+        "tools": [{"google_search": {}}],
+    }
     last_status = "unknown"
     for attempt in range(max_retries):
         try:
-            resp = requests.post(url, headers=headers, json=body, timeout=30)
+            # 有加搜尋工具時，模型要先搜尋網頁才能作答，會比純文字生成慢，timeout拉長一點
+            resp = requests.post(url, headers=headers, json=body, timeout=60)
             resp.raise_for_status()
             data = resp.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            candidate = data["candidates"][0]
+            parts = candidate.get("content", {}).get("parts", [])
+            text = "".join(p.get("text", "") for p in parts if "text" in p)
+
+            # 有用到搜尋的話，把引用來源整理附在報告最後，方便回頭點進去查證原文
+            grounding = candidate.get("groundingMetadata", {}) or {}
+            sources = []
+            for chunk in grounding.get("groundingChunks") or []:
+                web = chunk.get("web") or {}
+                if web.get("uri") and web.get("title"):
+                    sources.append(f"- {web['title']}：{web['uri']}")
+            if sources:
+                text += "\n\n📎 資料來源：\n" + "\n".join(sources[:8])
+
+            return text
         except Exception as e:
             # 重要：絕對不要把原始例外訊息直接寫進 report.json！
             # requests 的例外物件可能包含完整的請求 URL，若金鑰是用 query string 帶入
