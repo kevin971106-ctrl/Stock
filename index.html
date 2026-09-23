@@ -118,7 +118,8 @@ canvas{width:100%;height:auto;background:var(--bg);border:1px solid var(--border
 .kline-controls select{width:auto;min-width:160px;}
 .kline-link{font-size:.8rem;color:var(--accent);text-decoration:none;border-bottom:1px dashed var(--accent);}
 .kline-link:hover{color:var(--accent-deep);}
-@media (max-width:768px){ body{padding:.6rem;} .card{padding:1rem;} .dca-row{grid-template-columns:64px 1fr 1fr 36px;} }
+.grid-overview{display:grid;gap:1rem;grid-template-columns:1.4fr 1fr;}
+@media (max-width:768px){ body{padding:.6rem;} .card{padding:1rem;} .dca-row{grid-template-columns:64px 1fr 1fr 36px;} .grid-overview{grid-template-columns:1fr;} }
 </style>
 
 </head>
@@ -157,6 +158,23 @@ canvas{width:100%;height:auto;background:var(--bg);border:1px solid var(--border
     <div class="card"><div class="stat-label">持股市值（換算台幣）</div><div class="stat-value text-blue title-font" id="marketValue">$0</div></div>
     <div class="card"><div class="stat-label">現金活存（戰略備用金）</div><div class="stat-value text-amber title-font" id="capitalValue">$85,116</div></div>
     <div class="card"><div class="stat-label">總資產</div><div class="stat-value text-emerald title-font" id="totalAssets">$0</div></div>
+  </div>
+
+  <!-- 資產累積趨勢 + 資金分布：移到最上面，第一畫面就看得到 -->
+  <div class="grid grid-overview">
+    <div class="card">
+      <h2 style="font-size:1.15rem;margin-bottom:.3rem;">📈 資產累積趨勢</h2>
+      <p class="note" style="margin-top:0;margin-bottom:.7rem;">每天由晨報自動記錄一筆總資產快照，累積成不同天數就會畫出成長曲線</p>
+      <canvas id="assetTrendCanvas" width="900" height="220"></canvas>
+      <p id="assetTrendStatus" style="font-size:.8rem;color:var(--ink-faint);margin-top:.5rem;">尚無歷史資料</p>
+    </div>
+    <div class="card">
+      <h2 style="font-size:1.15rem;margin-bottom:.8rem;">🥧 目前資金分布</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;">
+        <canvas id="distributionPieCanvas" width="220" height="220" style="width:180px;height:180px;flex:none;"></canvas>
+        <div id="distributionLegend" style="flex:1;min-width:140px;font-size:.82rem;"></div>
+      </div>
+    </div>
   </div>
 
   <!-- K值監控 / 0050 金字塔監控 -->
@@ -273,6 +291,28 @@ canvas{width:100%;height:auto;background:var(--bg);border:1px solid var(--border
     <div id="holdingsList"></div>
   </div>
 
+  <!-- 同步持股給晨報 -->
+  <div class="card">
+    <h2 style="font-size:1.2rem;margin-bottom:.4rem;">🔄 同步持股給晨報</h2>
+    <p class="note" style="margin-top:0;margin-bottom:.8rem;">
+      上面的持股編輯只存在「這台瀏覽器」，晨報是在 GitHub 伺服器上跑的，看不到你的瀏覽器資料，
+      所以每次新增/刪除/改股數之後，記得複製一次貼到 GitHub，晨報分析的才會是你「目前真正持有」的股票，
+      不會還在講已經賣掉的舊持股。
+    </p>
+    <button class="btn-secondary" onclick="copyHoldingsForSync()"><span>📋</span><span>複製持股設定</span></button>
+    <span id="copySyncStatus" style="font-size:.8rem;color:var(--ink-faint);margin-left:.6rem;"></span>
+    <details style="margin-top:.8rem;">
+      <summary style="cursor:pointer;font-size:.82rem;color:var(--accent);">怎麼貼到 GitHub？（點開看步驟）</summary>
+      <ol style="margin:.6rem 0 0 1.2rem;font-size:.82rem;color:var(--ink-soft);line-height:1.9;">
+        <li>先按上面「複製持股設定」（會複製一段 JSON 到剪貼簿）</li>
+        <li>到 GitHub repo → <strong>Settings</strong> → 左側 <strong>Secrets and variables</strong> → <strong>Actions</strong></li>
+        <li>切到 <strong>Variables</strong> 分頁（不是 Secrets 分頁）→ <strong>New repository variable</strong></li>
+        <li>Name 填 <code>HOLDINGS_JSON</code>，Value 貼上剛複製的內容 → <strong>Add variable</strong></li>
+        <li>已經有這個變數的話，直接點進去 <strong>Update</strong> 覆蓋掉舊值即可</li>
+      </ol>
+    </details>
+  </div>
+
   <!-- K線圖 -->
   <div class="card">
     <h2 style="font-size:1.3rem;margin-bottom:.8rem;">📈 K線圖</h2>
@@ -282,23 +322,6 @@ canvas{width:100%;height:auto;background:var(--bg);border:1px solid var(--border
       <span id="klineStatus" style="font-size:.8rem;color:var(--ink-faint);">點「立即更新」抓取資料後即可看圖</span>
     </div>
     <canvas id="klineCanvas" width="900" height="320"></canvas>
-  </div>
-
-  <!-- 資產累積趨勢 -->
-  <div class="card">
-    <h2 style="font-size:1.3rem;margin-bottom:.3rem;">📈 資產累積趨勢</h2>
-    <p class="note" style="margin-top:0;margin-bottom:.8rem;">每天由晨報自動記錄一筆總資產快照，累積成不同天數就會畫出成長曲線</p>
-    <canvas id="assetTrendCanvas" width="900" height="260"></canvas>
-    <p id="assetTrendStatus" style="font-size:.8rem;color:var(--ink-faint);margin-top:.5rem;">尚無歷史資料</p>
-  </div>
-
-  <!-- 資金分布圓餅圖 -->
-  <div class="card">
-    <h2 style="font-size:1.3rem;margin-bottom:.8rem;">🥧 目前資金分布</h2>
-    <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;">
-      <canvas id="distributionPieCanvas" width="260" height="260" style="width:260px;height:260px;flex:none;"></canvas>
-      <div id="distributionLegend" style="flex:1;min-width:180px;font-size:.85rem;"></div>
-    </div>
   </div>
 
   <div class="footer">
@@ -431,6 +454,38 @@ function loadHoldings(){
 }
 function saveHoldings(){
   try{ localStorage.setItem('sw_holdings', JSON.stringify(holdings)); }catch(e){ console.error('儲存持股失敗', e); }
+}
+// 把目前持股（跟capital現金）組成 daily_report.py 的 load_holdings() 看得懂的格式，
+// 複製到剪貼簿，讓你可以貼到 GitHub repo 的 Repository Variables（HOLDINGS_JSON）。
+// 這是唯一的同步方式：不透過任何有寫入權限的Token，你的瀏覽器資料完全不會外流，
+// 只是把「目前持股清單」這個純設定值複製出去而已。
+function copyHoldingsForSync(){
+  const payload = {
+    holdings: holdings.map(h=>({
+      id: h.id, name: h.name, shares: h.shares, buyPrice: h.buyPrice, currency: h.currency
+    })),
+    cash: capital,
+  };
+  const text = JSON.stringify(payload);
+  const statusEl = document.getElementById('copySyncStatus');
+  const done = ()=>{ if(statusEl){ statusEl.textContent = '✅ 已複製！貼到 GitHub 的 HOLDINGS_JSON 變數即可'; setTimeout(()=>{ if(statusEl) statusEl.textContent=''; }, 6000); } };
+  const fail = ()=>{ if(statusEl) statusEl.textContent = '複製失敗，請手動選取下面文字複製：'; showFallbackTextarea(text); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(fail);
+  } else {
+    fail();
+  }
+}
+function showFallbackTextarea(text){
+  let ta = document.getElementById('syncFallbackTa');
+  if(!ta){
+    ta = document.createElement('textarea');
+    ta.id = 'syncFallbackTa';
+    ta.style.cssText = 'width:100%;margin-top:.6rem;font-size:.75rem;height:80px;';
+    document.getElementById('copySyncStatus').insertAdjacentElement('afterend', ta);
+  }
+  ta.value = text;
+  ta.select();
 }
 function loadDcaPlans(){
   try{
@@ -718,7 +773,7 @@ function drawAssetTrend(){
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   const cssWidth = canvas.parentElement.clientWidth || 300;
-  const cssHeight = 260;
+  const cssHeight = 220;
   canvas.width = cssWidth*dpr; canvas.height = cssHeight*dpr;
   canvas.style.width = cssWidth+'px'; canvas.style.height = cssHeight+'px';
   ctx.setTransform(dpr,0,0,dpr,0,0);

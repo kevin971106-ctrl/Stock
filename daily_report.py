@@ -49,36 +49,61 @@ _DEFAULT_HOLDINGS_US = [
 _DEFAULT_CASH_TWD = 85116
 
 HOLDINGS_FILE = "holdings.json"
+HOLDINGS_JSON_ENV = "HOLDINGS_JSON"  # 對應 daily-report.yml 裡的 ${{ vars.HOLDINGS_JSON }}
+
+
+def _normalize_holdings(raw, cash, source_label):
+    def norm(h):
+        return {
+            "id": h["id"],
+            "name": h.get("name", h["id"]),
+            "shares": h["shares"],
+            "buy_price": h.get("buyPrice", h.get("buy_price")),
+        }
+    tw = [norm(h) for h in raw if h.get("currency") == "TWD"]
+    us = [norm(h) for h in raw if h.get("currency") == "USD"]
+    if tw or us:
+        print(f"✅ 從{source_label}讀到 {len(tw)} 檔台股 + {len(us)} 檔美股，現金 NT${cash:,}")
+        return tw, us, cash
+    return None
 
 
 def load_holdings():
-    """優先讀取網頁自動同步過來的 holdings.json；讀不到/格式不對就退回內建保底值。
+    """持股來源優先順序：
+    1. HOLDINGS_JSON 環境變數（來自 GitHub repo 的 Repository Variables，
+       你在網頁上按「複製持股設定」貼過去的——這是唯一會反映你「目前真正持有」的來源，
+       不會分析你已經賣掉的舊持股，也不會漏掉剛買的新持股）
+    2. holdings.json 檔案（保留舊機制相容，目前網頁沒有自動寫入這個檔案）
+    3. 內建保底值（上面兩個都沒有時才會用到，多半代表你還沒同步過）
     回傳 (holdings_tw, holdings_us, cash_twd)。"""
+    env_json = os.environ.get(HOLDINGS_JSON_ENV, "").strip()
+    if env_json:
+        try:
+            data = json.loads(env_json)
+            result = _normalize_holdings(
+                data.get("holdings", []), data.get("cash", _DEFAULT_CASH_TWD), "HOLDINGS_JSON變數"
+            )
+            if result:
+                return result
+            print("⚠️ HOLDINGS_JSON 變數存在但內容是空的，改試其他來源")
+        except Exception as e:
+            print(f"⚠️ 解析 HOLDINGS_JSON 變數失敗（{e}），改試其他來源")
+
     if os.path.exists(HOLDINGS_FILE):
         try:
             with open(HOLDINGS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            raw = data.get("holdings", [])
-            cash = data.get("cash", _DEFAULT_CASH_TWD)
-
-            def norm(h):
-                return {
-                    "id": h["id"],
-                    "name": h.get("name", h["id"]),
-                    "shares": h["shares"],
-                    "buy_price": h.get("buyPrice", h.get("buy_price")),
-                }
-
-            tw = [norm(h) for h in raw if h.get("currency") == "TWD"]
-            us = [norm(h) for h in raw if h.get("currency") == "USD"]
-            if tw or us:
-                print(f"✅ 從 holdings.json 讀到 {len(tw)} 檔台股 + {len(us)} 檔美股，現金 NT${cash:,}")
-                return tw, us, cash
+            result = _normalize_holdings(
+                data.get("holdings", []), data.get("cash", _DEFAULT_CASH_TWD), "holdings.json"
+            )
+            if result:
+                return result
             print("⚠️ holdings.json 存在但內容是空的，改用內建保底持股")
         except Exception as e:
             print(f"⚠️ 讀取 holdings.json 失敗（{e}），改用內建保底持股")
     else:
-        print("ℹ️ 尚未找到 holdings.json（可能還沒設定網頁自動同步），使用內建保底持股")
+        print("ℹ️ 尚未設定 HOLDINGS_JSON 變數、也沒有 holdings.json，使用內建保底持股"
+              "（記得去網頁按「複製持股設定」同步一次）")
     return _DEFAULT_HOLDINGS_TW, _DEFAULT_HOLDINGS_US, _DEFAULT_CASH_TWD
 
 
@@ -194,11 +219,14 @@ def pyramid_suggestion(k_value):
 
 
 def build_prompt(market_data):
-    """依你的投資者設定檔組出分析 prompt。
-    持股代號改成從 HOLDINGS_TW/HOLDINGS_US 動態組出，
-    之後你在這兩個清單加減股票，這裡的文字說明會自動跟著變，不用再手動改這段文字。"""
+    """依你的投資者設定檔組出 prompt。
+    持股代號從 HOLDINGS_TW/HOLDINGS_US 動態組出——這兩份清單是由 load_holdings() 決定的
+    （優先讀你在網頁上設定、同步過來的持股；沒有同步過就用內建保底清單），
+    所以只要你有做「複製持股設定」同步，這裡分析的就一定是你目前真正持有的股票，
+    不會出現已經賣掉的舊持股，也不會漏掉剛買的新持股。
+    另外開啟了Google搜尋grounding，模型回答前會先查當下真實新聞，不是只憑舊知識瞎猜。"""
     ticker_list = "/".join([h["id"] for h in HOLDINGS_TW] + [h["id"] for h in HOLDINGS_US])
-    return f"""你是一位保守防禦型的投資分析助手，服務對象是林義凱。
+    return f"""你是一位保守防禦型的投資分析助手，服務對象是林義凱。你有Google搜尋工具可以查詢當下最新的新聞，請務必先搜尋今天/近期的真實新聞再回答，不要只憑舊有知識瞎猜，也絕對不要分析或提到不在下面「目前持股」清單裡的股票。
 
 他的投資原則：
 - 重視下檔風險，不追高，不因短期情緒交易
@@ -206,43 +234,66 @@ def build_prompt(market_data):
 - 每月5日/15日定期定額買 0050、00646 各NT$5,000
 - 0050金字塔加碼法：日K<50才開始分階梯加碼，現金備用金 NT${CASH_TWD:,}
 
+【目前持股，只分析這些，不要提到清單以外的股票】
+{ticker_list}
+
 今日市場數據：
 {json.dumps(market_data, ensure_ascii=False, indent=2)}
 
-請用「保守、防禦、數據導向」的風格，輸出今日投資晨報，需包含：
-1. 全球市場摘要（美股三大指數、費半、台股、VIX）
-2. 半導體/AI產業重點（若數據中有KLAC相關資訊）
-3. 0050金字塔加碼法：目前是否觸發？
-4. 對每檔持股（{ticker_list}）的簡短建議，只根據上方market_data裡實際有的資料分析，
-   若某檔股票的資料是error或缺漏，請明確說明「該檔今日資料抓取失敗，暫無法分析」，不要憑空編造價格或建議
-5. 今日市場判斷（🟢偏多/🟡中性/🟠謹慎/🔴偏空）+ 今日操作建議
+請用「保守、防禦、數據導向」的風格，搜尋後輸出今日投資晨報，需包含以下區塊（請保留這些標題）：
 
-請只做事實陳述與紀律提醒，不要鼓勵追高或頻繁交易。輸出繁體中文，控制在600字內。
+【市場摘要】全球市場摘要（美股三大指數、費半、台股、VIX），依上面的數據陳述現況。
+
+【持股相關新聞】搜尋並列出今天跟「目前持股」清單裡每一檔直接相關的新聞（若某檔今天沒有重大新聞可省略不寫，不要硬湊，也不要提清單外的股票）。
+
+【本週/本月焦點新聞】搜尋近一週、近一月與股市或半導體/AI/美股大盤/台股大盤相關產業最熱門的重點新聞（例如：Fed利率決策、地緣政治、半導體法案、AI晶片需求、大型科技公司財報等），挑2-4則最重要的簡述。
+
+【總經與意見領袖動向】搜尋以下兩個來源近期（優先近1-3天，其次近1週）的公開發言，分別條列：
+1. 川普（Donald Trump）— 近期跟總體經濟/股市/貿易關稅/產業政策相關的公開發言或政策動向，摘要重點並說明可能影響的產業或市場方向。
+2. Serenity（X帳號 @aleabitoreddit，AI/半導體供應鏈分析型KOL）— 近期發文或在會議/訪談上提到的個股觀點，明確列出「看多（做多/加碼）」的股票代號有哪些、「看空（做空/看衰）」的股票代號有哪些，並用一句話摘要他的理由。
+規則：只寫你搜尋到、有實際依據的內容，用你自己的話摘要不要整段照抄；如果某個來源這幾天查不到新的相關發言，就寫「近期查無新發言」，絕對不要編造引言或編造他們沒說過的股票代號。這只是市場意見/輿情參考，不代表本報告或林義凱的立場，也不是投資建議。
+
+【趨勢變化與可能影響】根據以上新聞與意見領袖動向，探討可能出現的趨勢變化，並說明對他「目前持股」組合可能的影響方向——只做情境分析與風險提醒，不做加碼/停利等具體操作建議。
+
+【金字塔加碼判斷】0050金字塔加碼法目前是否觸發？
+
+【持股建議】對「目前持股」清單裡每一檔的簡短建議（一行一檔），只根據上方market_data裡實際有的資料分析；若某檔資料是error或缺漏，請明確說明「該檔今日資料抓取失敗，暫無法分析」，不要憑空編造價格或建議。
+
+【今日判斷】今日市場判斷（🟢偏多/🟡中性/🟠謹慎/🔴偏空）+ 一句話操作提醒。
+
+請只做事實陳述與紀律提醒，不要鼓勵追高或頻繁交易，不要編造搜尋不到的新聞或發言。輸出繁體中文，控制在1200字內（不含來源清單）。
 """
 
 
-
-
 def call_gemini(prompt):
-    # Gemini 模型改版很快（1.5→2.0→2.5→3.x），依序嘗試多個候選模型；
-    # 503（伺服器過載）、429（額度限流）是暫時性問題，同一個模型先重試幾次再放棄。
+    # Gemini 模型改版很快，依序嘗試多個候選模型；gemini-2.5-flash 在2026/9底
+    # 被Google提前下架過（官方公告關閉日是10/16，但社群反應提前就開始404了），
+    # 所以把目前最穩定的 gemini-3.5-flash 放第一順位，其餘當備援。
+    # gemini-2.0-flash / gemini-1.5-flash-8b 依官方淘汰時程這時候應該都已經下架，先移除，
+    # 免得每次都白白浪費一次404來確認。
     candidate_models = [
-        "gemini-2.5-flash",
+        "gemini-3.5-flash",
         "gemini-flash-latest",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash-8b",
+        "gemini-2.5-flash",
     ]
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
-    body = {"contents": [{"parts": [{"text": prompt}]}]}
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        # 開啟 Google 搜尋 grounding，讓模型回答前能先查詢當下真實的新聞。
+        # 免費額度每天500次搜尋，這裡一天只用1次，用不到額外費用。
+        "tools": [{"google_search": {}}],
+    }
 
     last_status = None
     for model in candidate_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         for attempt in range(3):  # 同一個模型最多重試3次
             try:
-                resp = requests.post(url, headers=headers, json=body, timeout=30)
+                # 有加搜尋工具會比純文字生成慢，timeout拉長一點
+                resp = requests.post(url, headers=headers, json=body, timeout=60)
                 if resp.status_code == 404:
                     last_status = 404
+                    print(f"  {model} 回傳404（可能已被下架），改試下一個候選模型...")
                     break  # 模型不存在，不用重試，直接換下一個模型
                 if resp.status_code in (503, 429):
                     last_status = resp.status_code
@@ -253,18 +304,37 @@ def call_gemini(prompt):
                     continue
                 resp.raise_for_status()
                 data = resp.json()
-                return data["candidates"][0]["content"]["parts"][0]["text"]
+                candidate = data["candidates"][0]
+                parts = candidate.get("content", {}).get("parts", [])
+                text = "".join(p.get("text", "") for p in parts if "text" in p)
+
+                # 有用到搜尋的話，把引用來源整理附在報告最後，方便回頭查證
+                grounding = candidate.get("groundingMetadata", {}) or {}
+                sources = []
+                for chunk in grounding.get("groundingChunks") or []:
+                    web = chunk.get("web") or {}
+                    if web.get("uri") and web.get("title"):
+                        sources.append(f"- {web['title']}：{web['uri']}")
+                if sources:
+                    text += "\n\n📎 資料來源：\n" + "\n".join(sources[:8])
+
+                if model != candidate_models[0]:
+                    print(f"  注意：主要模型失敗，這次報告是用備援模型 {model} 產生的")
+                return text
             except requests.exceptions.HTTPError as e:
                 last_status = getattr(e.response, "status_code", "unknown")
-                raise RuntimeError(
-                    f"Gemini API 呼叫失敗（HTTP {last_status}），請檢查 GEMINI_API_KEY 是否有效"
-                )
-        # 對這個模型重試3次仍失敗（503/429）或直接404 → 換下一個候選模型
+                print(f"  {model} 呼叫失敗（HTTP {last_status}），改試下一個候選模型...")
+                break  # 換模型，不整個中斷（例如某模型不支援搜尋工具語法而回傳400）
+            except Exception as e:
+                last_status = type(e).__name__
+                print(f"  {model} 呼叫發生例外（{last_status}），改試下一個候選模型...")
+                break
+        # 對這個模型重試3次仍失敗（503/429）或直接404/其他錯誤 → 換下一個候選模型
     raise RuntimeError(
-        f"Gemini API 呼叫失敗：所有候選模型都無法使用（最後狀態碼 HTTP {last_status}）。"
-        f"若是 503/429，通常是 Google 免費層暫時過載，明天排程重跑大多會自動恢復；"
-        f"若持續發生，可能要考慮改用付費層或其他免費模型（如 Groq、OpenRouter）"
+        f"Gemini API 呼叫失敗：所有候選模型都無法使用（最後狀態 {last_status}）。"
+        f"若是 503/429，通常是 Google 免費層暫時過載，明天排程重跑大多會自動恢復"
     )
+
 
 
 ASSET_HISTORY_FILE = "asset_history.json"
