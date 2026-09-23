@@ -276,6 +276,10 @@ def call_gemini(prompt):
         "gemini-flash-latest",
         "gemini-2.5-flash",
     ]
+    # v1beta 目前有個 Google 那端已知的不穩定問題：models.list 顯示模型存在、也支援
+    # generateContent，但實際呼叫卻回傳404（2026年8-9月Google官方論壇上多次被回報）。
+    # 每個模型都順便多試一次穩定版 v1 端點當備援，繞開這個問題。
+    api_versions = ["v1beta", "v1"]
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -286,52 +290,53 @@ def call_gemini(prompt):
 
     last_status = None
     for model in candidate_models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        for attempt in range(3):  # 同一個模型最多重試3次
-            try:
-                # 有加搜尋工具會比純文字生成慢，timeout拉長一點
-                resp = requests.post(url, headers=headers, json=body, timeout=60)
-                if resp.status_code == 404:
-                    last_status = 404
-                    print(f"  {model} 回傳404（可能已被下架），改試下一個候選模型...")
-                    break  # 模型不存在，不用重試，直接換下一個模型
-                if resp.status_code in (503, 429):
-                    last_status = resp.status_code
-                    wait = (attempt + 1) * 8 + random.uniform(0, 3)
-                    print(f"  {model} 回傳 {resp.status_code}（伺服器過載/限流），"
-                          f"等待 {wait:.1f} 秒後重試 (第{attempt+1}次)...")
-                    time.sleep(wait)
-                    continue
-                resp.raise_for_status()
-                data = resp.json()
-                candidate = data["candidates"][0]
-                parts = candidate.get("content", {}).get("parts", [])
-                text = "".join(p.get("text", "") for p in parts if "text" in p)
+        for version in api_versions:
+            url = f"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent"
+            for attempt in range(3):  # 同一組 模型+版本 最多重試3次
+                try:
+                    # 有加搜尋工具會比純文字生成慢，timeout拉長一點
+                    resp = requests.post(url, headers=headers, json=body, timeout=60)
+                    if resp.status_code == 404:
+                        last_status = 404
+                        print(f"  {model}（{version}）回傳404，改試下一個組合...")
+                        break  # 這個組合不存在，不用重試，直接換下一個
+                    if resp.status_code in (503, 429):
+                        last_status = resp.status_code
+                        wait = (attempt + 1) * 8 + random.uniform(0, 3)
+                        print(f"  {model}（{version}）回傳 {resp.status_code}（伺服器過載/限流），"
+                              f"等待 {wait:.1f} 秒後重試 (第{attempt+1}次)...")
+                        time.sleep(wait)
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+                    candidate = data["candidates"][0]
+                    parts = candidate.get("content", {}).get("parts", [])
+                    text = "".join(p.get("text", "") for p in parts if "text" in p)
 
-                # 有用到搜尋的話，把引用來源整理附在報告最後，方便回頭查證
-                grounding = candidate.get("groundingMetadata", {}) or {}
-                sources = []
-                for chunk in grounding.get("groundingChunks") or []:
-                    web = chunk.get("web") or {}
-                    if web.get("uri") and web.get("title"):
-                        sources.append(f"- {web['title']}：{web['uri']}")
-                if sources:
-                    text += "\n\n📎 資料來源：\n" + "\n".join(sources[:8])
+                    # 有用到搜尋的話，把引用來源整理附在報告最後，方便回頭查證
+                    grounding = candidate.get("groundingMetadata", {}) or {}
+                    sources = []
+                    for chunk in grounding.get("groundingChunks") or []:
+                        web = chunk.get("web") or {}
+                        if web.get("uri") and web.get("title"):
+                            sources.append(f"- {web['title']}：{web['uri']}")
+                    if sources:
+                        text += "\n\n📎 資料來源：\n" + "\n".join(sources[:8])
 
-                if model != candidate_models[0]:
-                    print(f"  注意：主要模型失敗，這次報告是用備援模型 {model} 產生的")
-                return text
-            except requests.exceptions.HTTPError as e:
-                last_status = getattr(e.response, "status_code", "unknown")
-                print(f"  {model} 呼叫失敗（HTTP {last_status}），改試下一個候選模型...")
-                break  # 換模型，不整個中斷（例如某模型不支援搜尋工具語法而回傳400）
-            except Exception as e:
-                last_status = type(e).__name__
-                print(f"  {model} 呼叫發生例外（{last_status}），改試下一個候選模型...")
-                break
-        # 對這個模型重試3次仍失敗（503/429）或直接404/其他錯誤 → 換下一個候選模型
+                    if model != candidate_models[0] or version != api_versions[0]:
+                        print(f"  注意：主要組合失敗，這次報告是用備援組合 {model}（{version}）產生的")
+                    return text
+                except requests.exceptions.HTTPError as e:
+                    last_status = getattr(e.response, "status_code", "unknown")
+                    print(f"  {model}（{version}）呼叫失敗（HTTP {last_status}），改試下一個組合...")
+                    break  # 換組合，不整個中斷（例如某模型不支援搜尋工具語法而回傳400）
+                except Exception as e:
+                    last_status = type(e).__name__
+                    print(f"  {model}（{version}）呼叫發生例外（{last_status}），改試下一個組合...")
+                    break
+            # 對這組 模型+版本 重試3次仍失敗（503/429）或直接404/其他錯誤 → 換下一個版本/模型
     raise RuntimeError(
-        f"Gemini API 呼叫失敗：所有候選模型都無法使用（最後狀態 {last_status}）。"
+        f"Gemini API 呼叫失敗：所有候選模型與版本組合都無法使用（最後狀態 {last_status}）。"
         f"若是 503/429，通常是 Google 免費層暫時過載，明天排程重跑大多會自動恢復"
     )
 
