@@ -223,6 +223,38 @@ def call_gemini(prompt):
     )
 
 
+ASSET_HISTORY_FILE = "asset_history.json"
+
+
+def update_asset_history(total_assets, market_value, cash):
+    """把今天的總資產快照加進歷史紀錄檔，供網頁畫累積趨勢折線圖用。
+    同一天重跑會覆蓋當天那一筆，不會一天內累積出多筆重複資料；
+    只保留最近365筆，避免檔案無限長大。"""
+    history = []
+    if os.path.exists(ASSET_HISTORY_FILE):
+        try:
+            with open(ASSET_HISTORY_FILE, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        except Exception as e:
+            print(f"  讀取舊的 asset_history.json 失敗，將視為空歷史重新開始: {e}")
+            history = []
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    history = [h for h in history if h.get("date") != today]
+    history.append({
+        "date": today,
+        "total_assets": round(total_assets),
+        "market_value": round(market_value),
+        "cash": cash,
+    })
+    history.sort(key=lambda h: h["date"])
+    history = history[-365:]
+
+    with open(ASSET_HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+    return history
+
+
 def main():
     market_data = {}
 
@@ -275,6 +307,24 @@ def main():
 
     k_value = market_data.get("0050", {}).get("k_value")
     pyramid_note = pyramid_suggestion(k_value)
+
+    # ---- 計算今天的總資產，寫進歷史紀錄檔（供網頁畫累積趨勢折線圖）----
+    fx_rate = market_data.get("TWD=X", {}).get("close") or 32.5
+    market_value_twd = 0.0
+    for h in HOLDINGS_TW:
+        entry = market_data.get(h["id"], {})
+        if isinstance(entry.get("close"), (int, float)):
+            market_value_twd += entry["close"] * h["shares"]
+    for h in HOLDINGS_US:
+        entry = market_data.get(h["id"], {})
+        if isinstance(entry.get("close"), (int, float)):
+            market_value_twd += entry["close"] * h["shares"] * fx_rate
+    total_assets_twd = market_value_twd + CASH_TWD
+    try:
+        update_asset_history(total_assets_twd, market_value_twd, CASH_TWD)
+        print(f"✅ asset_history.json 已更新（今日總資產約 NT${total_assets_twd:,.0f}）")
+    except Exception as e:
+        print(f"⚠️ 寫入 asset_history.json 失敗: {e}")
 
     prompt = build_prompt(market_data)
     try:
