@@ -32,19 +32,57 @@ YAHOO_HEADERS = {
 _session = requests.Session()
 _session.headers.update(YAHOO_HEADERS)
 
-# ---- 你的持股設定（跟網頁 holdings 保持一致，之後有交易記得同步改這裡）----
-HOLDINGS_TW = [
+# ---- 持股設定（保底預設值：只有在 holdings.json 不存在或讀取失敗時才會用到）----
+# 網頁每次新增/編輯/刪除持股時，會自動透過GitHub API把最新持股寫進 holdings.json，
+# 正常情況下下面這份不需要手動改；只有在還沒設定同步、或同步失敗時才會用到這份保底資料。
+_DEFAULT_HOLDINGS_TW = [
     {"id": "0050",  "name": "元大台灣50",     "shares": 5990,  "buy_price": 102.54},
     {"id": "00646", "name": "元大S&P500",     "shares": 4000,  "buy_price": 60.28},
     {"id": "00662", "name": "富邦NASDAQ",     "shares": 4000,  "buy_price": 101.26},
     {"id": "00713", "name": "元大台灣高息低波", "shares": 8000,  "buy_price": 52.71},
     {"id": "00919", "name": "群益台灣精選高息", "shares": 18000, "buy_price": 23.67},
 ]
-HOLDINGS_US = [
+_DEFAULT_HOLDINGS_US = [
     {"id": "KLAC", "name": "KLA Corporation", "shares": 40, "buy_price": 181.33},
     {"id": "SPCX", "name": "SpaceX",          "shares": 1,  "buy_price": 138.94},
 ]
-CASH_TWD = 85116
+_DEFAULT_CASH_TWD = 85116
+
+HOLDINGS_FILE = "holdings.json"
+
+
+def load_holdings():
+    """優先讀取網頁自動同步過來的 holdings.json；讀不到/格式不對就退回內建保底值。
+    回傳 (holdings_tw, holdings_us, cash_twd)。"""
+    if os.path.exists(HOLDINGS_FILE):
+        try:
+            with open(HOLDINGS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            raw = data.get("holdings", [])
+            cash = data.get("cash", _DEFAULT_CASH_TWD)
+
+            def norm(h):
+                return {
+                    "id": h["id"],
+                    "name": h.get("name", h["id"]),
+                    "shares": h["shares"],
+                    "buy_price": h.get("buyPrice", h.get("buy_price")),
+                }
+
+            tw = [norm(h) for h in raw if h.get("currency") == "TWD"]
+            us = [norm(h) for h in raw if h.get("currency") == "USD"]
+            if tw or us:
+                print(f"✅ 從 holdings.json 讀到 {len(tw)} 檔台股 + {len(us)} 檔美股，現金 NT${cash:,}")
+                return tw, us, cash
+            print("⚠️ holdings.json 存在但內容是空的，改用內建保底持股")
+        except Exception as e:
+            print(f"⚠️ 讀取 holdings.json 失敗（{e}），改用內建保底持股")
+    else:
+        print("ℹ️ 尚未找到 holdings.json（可能還沒設定網頁自動同步），使用內建保底持股")
+    return _DEFAULT_HOLDINGS_TW, _DEFAULT_HOLDINGS_US, _DEFAULT_CASH_TWD
+
+
+HOLDINGS_TW, HOLDINGS_US, CASH_TWD = load_holdings()
 
 
 def fetch_finmind_price(stock_id, days=90):
@@ -156,7 +194,10 @@ def pyramid_suggestion(k_value):
 
 
 def build_prompt(market_data):
-    """依你的投資者設定檔組出分析 prompt"""
+    """依你的投資者設定檔組出分析 prompt。
+    持股代號改成從 HOLDINGS_TW/HOLDINGS_US 動態組出，
+    之後你在這兩個清單加減股票，這裡的文字說明會自動跟著變，不用再手動改這段文字。"""
+    ticker_list = "/".join([h["id"] for h in HOLDINGS_TW] + [h["id"] for h in HOLDINGS_US])
     return f"""你是一位保守防禦型的投資分析助手，服務對象是林義凱。
 
 他的投資原則：
@@ -172,11 +213,14 @@ def build_prompt(market_data):
 1. 全球市場摘要（美股三大指數、費半、台股、VIX）
 2. 半導體/AI產業重點（若數據中有KLAC相關資訊）
 3. 0050金字塔加碼法：目前是否觸發？
-4. 對每檔持股（0050/00646/00662/00713/00919/KLAC/SPCX）的簡短建議
+4. 對每檔持股（{ticker_list}）的簡短建議，只根據上方market_data裡實際有的資料分析，
+   若某檔股票的資料是error或缺漏，請明確說明「該檔今日資料抓取失敗，暫無法分析」，不要憑空編造價格或建議
 5. 今日市場判斷（🟢偏多/🟡中性/🟠謹慎/🔴偏空）+ 今日操作建議
 
 請只做事實陳述與紀律提醒，不要鼓勵追高或頻繁交易。輸出繁體中文，控制在600字內。
 """
+
+
 
 
 def call_gemini(prompt):
