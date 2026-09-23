@@ -25,10 +25,10 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python daily_report.py
 
-      - name: Commit report.json
+      - name: Commit report.json and asset_history.json
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add report.json
+          git add report.json asset_history.json
           git commit -m "每日晨報更新 $(date +'%Y-%m-%d')" || echo "no changes"
           git push
