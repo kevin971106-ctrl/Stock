@@ -266,15 +266,11 @@ def build_prompt(market_data):
 
 
 def call_gemini(prompt):
-    # Gemini 模型改版很快，依序嘗試多個候選模型；gemini-2.5-flash 在2026/9底
-    # 被Google提前下架過（官方公告關閉日是10/16，但社群反應提前就開始404了），
-    # 所以把目前最穩定的 gemini-3.5-flash 放第一順位，其餘當備援。
-    # gemini-2.0-flash / gemini-1.5-flash-8b 依官方淘汰時程這時候應該都已經下架，先移除，
-    # 免得每次都白白浪費一次404來確認。
+    # gemini-2.5-flash 已經確認被下架（每次都404），拿掉不再嘗試，省時間。
+    # gemini-3.5-flash 是目前主力穩定版，gemini-flash-latest 當備援。
     candidate_models = [
         "gemini-3.5-flash",
         "gemini-flash-latest",
-        "gemini-2.5-flash",
     ]
     # v1beta 目前有個 Google 那端已知的不穩定問題：models.list 顯示模型存在、也支援
     # generateContent，但實際呼叫卻回傳404（2026年8-9月Google官方論壇上多次被回報）。
@@ -284,11 +280,12 @@ def call_gemini(prompt):
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
         # 開啟 Google 搜尋 grounding，讓模型回答前能先查詢當下真實的新聞。
-        # 免費額度每天500次搜尋，這裡一天只用1次，用不到額外費用。
+        # 這個功能需要Google帳號開通付款方式才能穩定使用（即使在免費額度內），
+        # 純無卡的免費金鑰常常會直接收到429，這是Google那邊的已知限制。
         "tools": [{"google_search": {}}],
     }
 
-    last_status = None
+    failure_log = []  # 記錄每個組合各自失敗的原因，方便診斷（不要只留最後一筆，容易誤導）
     for model in candidate_models:
         for version in api_versions:
             url = f"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent"
@@ -297,14 +294,15 @@ def call_gemini(prompt):
                     # 有加搜尋工具會比純文字生成慢，timeout拉長一點
                     resp = requests.post(url, headers=headers, json=body, timeout=60)
                     if resp.status_code == 404:
-                        last_status = 404
+                        failure_log.append(f"{model}({version})=404")
                         print(f"  {model}（{version}）回傳404，改試下一個組合...")
                         break  # 這個組合不存在，不用重試，直接換下一個
                     if resp.status_code in (503, 429):
-                        last_status = resp.status_code
                         wait = (attempt + 1) * 8 + random.uniform(0, 3)
-                        print(f"  {model}（{version}）回傳 {resp.status_code}（伺服器過載/限流），"
+                        print(f"  {model}（{version}）回傳 {resp.status_code}（伺服器過載/限流/需開通付款），"
                               f"等待 {wait:.1f} 秒後重試 (第{attempt+1}次)...")
+                        if attempt == 2:
+                            failure_log.append(f"{model}({version})={resp.status_code}")
                         time.sleep(wait)
                         continue
                     resp.raise_for_status()
@@ -327,17 +325,20 @@ def call_gemini(prompt):
                         print(f"  注意：主要組合失敗，這次報告是用備援組合 {model}（{version}）產生的")
                     return text
                 except requests.exceptions.HTTPError as e:
-                    last_status = getattr(e.response, "status_code", "unknown")
-                    print(f"  {model}（{version}）呼叫失敗（HTTP {last_status}），改試下一個組合...")
+                    status = getattr(e.response, "status_code", "unknown")
+                    failure_log.append(f"{model}({version})={status}")
+                    print(f"  {model}（{version}）呼叫失敗（HTTP {status}），改試下一個組合...")
                     break  # 換組合，不整個中斷（例如某模型不支援搜尋工具語法而回傳400）
                 except Exception as e:
-                    last_status = type(e).__name__
-                    print(f"  {model}（{version}）呼叫發生例外（{last_status}），改試下一個組合...")
+                    failure_log.append(f"{model}({version})={type(e).__name__}")
+                    print(f"  {model}（{version}）呼叫發生例外（{type(e).__name__}），改試下一個組合...")
                     break
             # 對這組 模型+版本 重試3次仍失敗（503/429）或直接404/其他錯誤 → 換下一個版本/模型
     raise RuntimeError(
-        f"Gemini API 呼叫失敗：所有候選模型與版本組合都無法使用（最後狀態 {last_status}）。"
-        f"若是 503/429，通常是 Google 免費層暫時過載，明天排程重跑大多會自動恢復"
+        f"Gemini API 呼叫失敗：所有候選模型與版本組合都無法使用。"
+        f"各組合失敗原因：{', '.join(failure_log)}。"
+        f"若都是429，很可能是Google帳號還沒開通付款方式（即使沒超過免費額度，grounding搜尋功能也常需要）；"
+        f"若是503，通常是暫時過載，明天重跑大多會自動恢復"
     )
 
 
