@@ -20,6 +20,9 @@ from datetime import datetime, timedelta
 
 FINMIND_TOKEN = os.environ.get("FINMIND_TOKEN", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+# Disclosed Capitol：追蹤美國國會議員／行政部門（含川普）依STOCK Act公開申報的股票交易，
+# 免費金鑰到 https://www.disclosedcapitol.com/signup 申請。沒設定就自動略過這部分，不影響其他內容。
+DISCLOSED_CAPITOL_API_KEY = os.environ.get("DISCLOSED_CAPITOL_API_KEY", "")
 
 # Yahoo Finance 對沒有瀏覽器標頭、或來自雲端主機（如 GitHub Actions）的請求
 # 容易回傳 429 Too Many Requests，因此統一用一個帶標頭的 Session，
@@ -204,6 +207,38 @@ def fetch_yahoo_history(symbol, max_retries=3):
     raise last_error
 
 
+def fetch_congress_trades(ticker, limit=5):
+    """查詢美股上，國會議員/行政部門（含川普等，依 STOCK Act 公開揭露）對這檔股票的近期交易。
+    資料來源：Disclosed Capitol API。沒設定金鑰、或查詢失敗，都直接回傳空清單，
+    不會讓整個晨報產生失敗——這一塊是加值資訊，不是關鍵路徑。"""
+    if not DISCLOSED_CAPITOL_API_KEY:
+        return []
+    try:
+        resp = requests.get(
+            f"https://api.disclosedcapitol.com/tickers/{ticker}/trades",
+            headers={"DC-API-Key": DISCLOSED_CAPITOL_API_KEY},
+            params={"limit": limit},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return [
+            {
+                "politician": t.get("politician_name"),
+                "party": t.get("party"),
+                "chamber": t.get("chamber"),
+                "type": t.get("trade_type"),
+                "amount_range": t.get("amount_range"),
+                "transaction_date": t.get("transaction_date"),
+                "disclosure_date": t.get("disclosure_date"),
+            }
+            for t in data.get("trades", [])
+        ]
+    except Exception as e:
+        print(f"  查詢 {ticker} 的國會交易資料失敗（{e}），略過這部分")
+        return []
+
+
 def pyramid_suggestion(k_value):
     if k_value is None:
         return "K值資料不足，暫無法判斷"
@@ -252,6 +287,8 @@ def build_prompt(market_data):
 1. 川普（Donald Trump）— 近期跟總體經濟/股市/貿易關稅/產業政策相關的公開發言或政策動向，摘要重點並說明可能影響的產業或市場方向。
 2. Serenity（X帳號 @aleabitoreddit，AI/半導體供應鏈分析型KOL）— 近期發文或在會議/訪談上提到的個股觀點，明確列出「看多（做多/加碼）」的股票代號有哪些、「看空（做空/看衰）」的股票代號有哪些，並用一句話摘要他的理由。
 規則：只寫你搜尋到、有實際依據的內容，用你自己的話摘要不要整段照抄；如果某個來源這幾天查不到新的相關發言，就寫「近期查無新發言」，絕對不要編造引言或編造他們沒說過的股票代號。這只是市場意見/輿情參考，不代表本報告或林義凱的立場，也不是投資建議。
+
+【國會議員交易動向】檢查上方market_data裡，各檔持股是否有附帶「congress_trades」欄位（美國國會議員/行政部門依STOCK Act公開申報的交易紀錄，只有美股才可能有）。如果有，列出裡面的交易（政治人物姓名、政黨、買/賣、金額區間、交易日期），特別點出「Donald Trump」或知名人物的交易；如果完全沒有這個欄位或是空的，就寫「近期無國會議員申報交易資料」，不要編造。這是公開申報資料的參考，不代表投資建議。
 
 【趨勢變化與可能影響】根據以上新聞與意見領袖動向，探討可能出現的趨勢變化，並說明對他「目前持股」組合可能的影響方向——只做情境分析與風險提醒，不做加碼/停利等具體操作建議。
 
@@ -415,6 +452,9 @@ def main():
                 "buy_price": h["buy_price"], "shares": h["shares"],
                 "history": history,
             }
+            congress_trades = fetch_congress_trades(h["id"])
+            if congress_trades:
+                market_data[h["id"]]["congress_trades"] = congress_trades
         except Exception as e:
             market_data[h["id"]] = {"error": str(e)}
 
@@ -451,6 +491,10 @@ def main():
         ai_report = call_gemini(prompt) if GEMINI_API_KEY else "（未設定 GEMINI_API_KEY，僅顯示原始數據）"
     except Exception as e:
         ai_report = f"Gemini 呼叫失敗：{e}"
+
+    # Disclosed Capitol API 條款要求：有引用/轉載他們整理過的資料時要附上出處標註
+    if any("congress_trades" in v for v in market_data.values() if isinstance(v, dict)):
+        ai_report += "\n\n（國會議員交易資料由 Disclosed Capitol 提供：disclosedcapitol.com）"
 
     output = {
         "generated_at": datetime.now().isoformat(),
