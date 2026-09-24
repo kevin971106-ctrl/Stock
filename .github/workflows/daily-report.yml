@@ -25,6 +25,7 @@ jobs:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           HOLDINGS_JSON: ${{ vars.HOLDINGS_JSON }}
+          DISCLOSED_CAPITOL_API_KEY: ${{ secrets.DISCLOSED_CAPITOL_API_KEY }}
         run: python daily_report.py
 
       - name: Commit report.json and asset_history.json
