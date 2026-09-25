@@ -32,7 +32,8 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+          git fetch origin main
+          git reset --soft origin/main
           git add report.json asset_history.json
-          git pull --rebase origin main
           git commit -m "每日晨報更新 $(date +'%Y-%m-%d')" || echo "no changes"
           git push
