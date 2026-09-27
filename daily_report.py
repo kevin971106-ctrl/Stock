@@ -253,6 +253,20 @@ def pyramid_suggestion(k_value):
     return f"K={k_value}（≥50）→ 高掛免戰牌，一張不追，維持定期定額"
 
 
+def _market_data_summary(market_data):
+    """AI寫分析只需要現價/成本/K值/錯誤/國會交易這些精簡數字，
+    不需要每檔股票90天的完整K線history（那是給網頁畫圖用的）。
+    去掉history欄位能大幅縮小prompt大小：一來降低token用量、減少撞429的機率，
+    二來避免部分新模型在超大prompt下把輸出額度都耗在內部思考，導致最後生不出真正的回答文字。"""
+    summary = {}
+    for key, entry in market_data.items():
+        if isinstance(entry, dict):
+            summary[key] = {k: v for k, v in entry.items() if k != "history"}
+        else:
+            summary[key] = entry
+    return summary
+
+
 def build_prompt(market_data):
     """依你的投資者設定檔組出 prompt。
     持股代號從 HOLDINGS_TW/HOLDINGS_US 動態組出——這兩份清單是由 load_holdings() 決定的
@@ -261,6 +275,7 @@ def build_prompt(market_data):
     不會出現已經賣掉的舊持股，也不會漏掉剛買的新持股。
     另外開啟了Google搜尋grounding，模型回答前會先查當下真實新聞，不是只憑舊知識瞎猜。"""
     ticker_list = "/".join([h["id"] for h in HOLDINGS_TW] + [h["id"] for h in HOLDINGS_US])
+    market_data_for_prompt = _market_data_summary(market_data)
     return f"""你是一位保守防禦型的投資分析助手，服務對象是林義凱。你有Google搜尋工具可以查詢當下最新的新聞，請務必先搜尋今天/近期的真實新聞再回答，不要只憑舊有知識瞎猜，也絕對不要分析或提到不在下面「目前持股」清單裡的股票。
 
 他的投資原則：
@@ -273,7 +288,7 @@ def build_prompt(market_data):
 {ticker_list}
 
 今日市場數據：
-{json.dumps(market_data, ensure_ascii=False, indent=2)}
+{json.dumps(market_data_for_prompt, ensure_ascii=False, indent=2)}
 
 請用「保守、防禦、數據導向」的風格，搜尋後輸出今日投資晨報，需包含以下區塊（請保留這些標題）：
 
@@ -332,6 +347,14 @@ def _call_gemini_once(model, version, prompt, use_search, failure_log):
             candidate = data["candidates"][0]
             parts = candidate.get("content", {}).get("parts", [])
             text = "".join(p.get("text", "") for p in parts if "text" in p)
+
+            if not text.strip():
+                # 有些模型在prompt過大或內部思考耗盡輸出額度時，會回200但內容是空的。
+                # 這種「表面成功、實際空白」的狀況不能當成功收下，否則晨報會只剩備援提示文字。
+                finish_reason = candidate.get("finishReason", "unknown")
+                failure_log.append(f"{tag}=empty(finishReason={finish_reason})")
+                print(f"  {tag} 回應成功但內容是空的（finishReason={finish_reason}），改試下一個組合...")
+                return None
 
             if use_search:
                 grounding = candidate.get("groundingMetadata", {}) or {}
