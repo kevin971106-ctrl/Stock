@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-27T01:41:38.380979",
+  "generated_at": "2026-09-27T15:59:00.607598",
   "pyramid_status": "K=77.2（≥50）→ 高掛免戰牌，一張不追，維持定期定額",
   "k_value_0050": 77.2,
   "market_data": {
@@ -3177,8 +3177,8 @@
       "close": 14.87
     },
     "TWD=X": {
-      "close": 31.695
+      "close": 31.708
     }
   },
-  "ai_report": "Gemini 呼叫失敗：Gemini API 呼叫失敗：所有候選模型與版本組合都無法使用。各組合失敗原因：gemini-3.5-flash(v1beta)=429, gemini-3.5-flash(v1)=429, gemini-flash-latest(v1beta)=429, gemini-flash-latest(v1)=404。若都是429，很可能是Google帳號還沒開通付款方式（即使沒超過免費額度，grounding搜尋功能也常需要）；若是503，通常是暫時過載，明天重跑大多會自動恢復"
+  "ai_report": "\n\n（⚠️本次晨報為備援模式產生，未啟用即時新聞搜尋，僅根據當日市場數據分析）"
 }
