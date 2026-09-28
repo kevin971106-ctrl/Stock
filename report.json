@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-27T15:59:00.607598",
+  "generated_at": "2026-09-28T01:55:51.031663",
   "pyramid_status": "K=77.2（≥50）→ 高掛免戰牌，一張不追，維持定期定額",
   "k_value_0050": 77.2,
   "market_data": {
@@ -9,13 +9,6 @@
       "buy_price": 102.87,
       "shares": 5990,
       "history": [
-        {
-          "date": "2026-06-29",
-          "open": 103.35,
-          "high": 105.35,
-          "low": 103.3,
-          "close": 104.45
-        },
         {
           "date": "2026-06-30",
           "open": 106.85,
@@ -460,13 +453,6 @@
       "shares": 4000,
       "history": [
         {
-          "date": "2026-06-29",
-          "open": 73.45,
-          "high": 74.25,
-          "low": 73.45,
-          "close": 74.2
-        },
-        {
           "date": "2026-06-30",
           "open": 74.3,
           "high": 74.7,
@@ -908,13 +894,6 @@
       "buy_price": 101.66,
       "shares": 4000,
       "history": [
-        {
-          "date": "2026-06-29",
-          "open": 119.6,
-          "high": 120.5,
-          "low": 119.5,
-          "close": 120.4
-        },
         {
           "date": "2026-06-30",
           "open": 121.75,
@@ -1358,13 +1337,6 @@
       "shares": 8000,
       "history": [
         {
-          "date": "2026-06-29",
-          "open": 59.85,
-          "high": 60.2,
-          "low": 59.75,
-          "close": 60.0
-        },
-        {
           "date": "2026-06-30",
           "open": 60.05,
           "high": 60.4,
@@ -1806,13 +1778,6 @@
       "buy_price": 23.76,
       "shares": 18000,
       "history": [
-        {
-          "date": "2026-06-29",
-          "open": 29.74,
-          "high": 29.97,
-          "low": 29.37,
-          "close": 29.46
-        },
         {
           "date": "2026-06-30",
           "open": 29.52,
@@ -3177,8 +3142,8 @@
       "close": 14.87
     },
     "TWD=X": {
-      "close": 31.708
+      "close": 31.802
     }
   },
-  "ai_report": "\n\n（⚠️本次晨報為備援模式產生，未啟用即時新聞搜尋，僅根據當日市場數據分析）"
+  "ai_report": "Gemini 呼叫失敗：Gemini API 呼叫失敗：所有候選模型與版本組合（含不開搜尋的備援）都無法使用。各組合失敗原因：gemini-3.5-flash(v1beta)+search=429, gemini-3.5-flash(v1)+search=429, gemini-flash-latest(v1beta)+search=429, gemini-flash-latest(v1)+search=404, gemini-3.5-flash(v1beta)=ReadTimeout, gemini-3.5-flash(v1)=empty(finishReason=MALFORMED_FUNCTION_CALL), gemini-flash-latest(v1beta)=empty(finishReason=MALFORMED_FUNCTION_CALL), gemini-flash-latest(v1)=404。若都是429，很可能是Google帳號還沒開通付款方式，或是免費額度真的用完了；若是503，通常是暫時過載，明天重跑大多會自動恢復"
 }
