@@ -325,6 +325,12 @@ def _call_gemini_once(model, version, prompt, use_search, failure_log):
     body = {"contents": [{"parts": [{"text": prompt}]}]}
     if use_search:
         body["tools"] = [{"google_search": {}}]
+    else:
+        # 不開搜尋時，明確告訴模型「完全不要做任何工具呼叫」。
+        # gemini-3.5-flash這類較新、偏「主動型」的模型，即使沒宣告任何tools，
+        # 有時仍會自己嘗試觸發一次工具呼叫，格式對不上就會回傳
+        # finishReason=MALFORMED_FUNCTION_CALL、內容空白，這裡強制關閉可避免此問題。
+        body["toolConfig"] = {"functionCallingConfig": {"mode": "NONE"}}
     tag = f"{model}({version}){'+search' if use_search else ''}"
 
     for attempt in range(3):
