@@ -326,11 +326,14 @@ def _call_gemini_once(model, version, prompt, use_search, failure_log):
     if use_search:
         body["tools"] = [{"google_search": {}}]
     else:
-        # 不開搜尋時，明確告訴模型「完全不要做任何工具呼叫」。
-        # gemini-3.5-flash這類較新、偏「主動型」的模型，即使沒宣告任何tools，
-        # 有時仍會自己嘗試觸發一次工具呼叫，格式對不上就會回傳
-        # finishReason=MALFORMED_FUNCTION_CALL、內容空白，這裡強制關閉可避免此問題。
+        # 不開搜尋時的兩道保險，減少「主動型」新模型自己亂觸發工具呼叫、生出空白內容的機率：
+        # 1) 明確告訴模型完全不要做任何工具呼叫
         body["toolConfig"] = {"functionCallingConfig": {"mode": "NONE"}}
+        # 2) 關閉內部思考（thinkingBudget=0）。實測發現只設toolConfig仍偶爾會遇到
+        #    finishReason=MALFORMED_FUNCTION_CALL，懷疑是模型「思考」過程中考慮要不要
+        #    呼叫工具、最後吐出格式錯誤的殘留物；關閉思考可以讓模型直接輸出答案文字。
+        #    只有2.5以後的模型支援這個欄位，較舊模型會忽略此欄位、不受影響。
+        body["generationConfig"] = {"thinkingConfig": {"thinkingBudget": 0}}
     tag = f"{model}({version}){'+search' if use_search else ''}"
 
     for attempt in range(3):
@@ -406,8 +409,11 @@ def call_gemini(prompt):
 
     # 第二輪：搜尋功能常因帳號未開通付款方式而全數429，
     # 這裡最後再試一次「不開搜尋、純文字生成」，寧可少了即時新聞佐證，也不要整篇開天窗。
+    # 這輪額外多加幾個較舊、較穩定、沒有「主動觸發工具呼叫」怪癖的模型當備援，
+    # 增加至少有一個能成功產生內容的機率。
+    fallback_models = candidate_models + ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash-8b"]
     print("  帶搜尋功能的組合全部失敗，改試「不開搜尋」的純文字生成當最終備援...")
-    for model in candidate_models:
+    for model in fallback_models:
         for version in api_versions:
             text = _call_gemini_once(model, version, prompt, use_search=False, failure_log=failure_log)
             if text is not None:
