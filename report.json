@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-29T02:44:14.643485",
+  "generated_at": "2026-09-29T03:26:18.586438",
   "pyramid_status": "K=77.2（≥50）→ 高掛免戰牌，一張不追，維持定期定額",
   "k_value_0050": 77.2,
   "market_data": {
@@ -3092,7 +3092,7 @@
       ]
     },
     "^TWII": {
-      "close": 47818.56
+      "close": 47786.28
     },
     "^GSPC": {
       "close": 7683.69
@@ -3107,7 +3107,7 @@
       "close": 16.07
     },
     "TWD=X": {
-      "close": 31.81
+      "close": 31.794
     }
   },
   "ai_report": "Gemini 呼叫失敗：Gemini API 呼叫失敗：所有候選模型與版本組合（含不開搜尋的備援）都無法使用。各組合失敗原因：gemini-3.5-flash(v1beta)+search=429, gemini-3.5-flash(v1)+search=429, gemini-flash-latest(v1beta)+search=429, gemini-flash-latest(v1)+search=404, gemini-3.5-flash(v1beta)=empty(finishReason=MALFORMED_FUNCTION_CALL), gemini-3.5-flash(v1)=empty(finishReason=MALFORMED_FUNCTION_CALL), gemini-flash-latest(v1beta)=503, gemini-flash-latest(v1)=404。若都是429，很可能是Google帳號還沒開通付款方式，或是免費額度真的用完了；若是503，通常是暫時過載，明天重跑大多會自動恢復"
