@@ -280,5 +280,11 @@
     "total_assets": 2625356,
     "market_value": 2540240,
     "cash": 85116
+  },
+  {
+    "date": "2026-11-10",
+    "total_assets": 2696536,
+    "market_value": 2611420,
+    "cash": 85116
   }
 ]
